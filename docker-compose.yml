@@ -1,0 +1,105 @@
+version: '3.8'
+
+services:
+  # Gateway Server
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    container_name: bifrost-gateway
+    ports:
+      - "8010:8010"
+    networks:
+      - bifrost-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8010"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # Bifrost Agent
+  agent:
+    build:
+      context: .
+      dockerfile: agent/Dockerfile
+    container_name: bifrost-agent
+    environment:
+      - BIFROST_KEY=grpc://agent1:test-token-123@gateway:8010
+    depends_on:
+      gateway:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    networks:
+      - bifrost-network
+    restart: unless-stopped
+
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: bifrost-mysql
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_DATABASE=testdb
+      - MYSQL_USER=bifrostuser
+      - MYSQL_PASSWORD=bifrostpass
+    volumes:
+      - ./mysql-init:/docker-entrypoint-initdb.d
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    networks:
+      - bifrost-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # REST API Server
+  api-server:
+    build:
+      context: .
+      dockerfile: api-server/Dockerfile
+    container_name: bifrost-api-server
+    ports:
+      - "8080:8080"
+    depends_on:
+      gateway:
+        condition: service_healthy
+    networks:
+      - bifrost-network
+    environment:
+      - GATEWAY_ADDR=gateway:8010
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: bifrost-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api-server
+    networks:
+      - bifrost-network
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8080
+    restart: unless-stopped
+
+networks:
+  bifrost-network:
+    driver: bridge
+
+volumes:
+  mysql-data:

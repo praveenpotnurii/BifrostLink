@@ -1,0 +1,6 @@
+{"level":"info","timestamp":"2025-10-29T14:38:25+05:30","logger":"POC/main.go:171","msg":"version=unknown, platform=darwin/arm64, type=dsn, mode=, grpc_server=localhost:8010, tls=false, tlsca=false - starting agent"}
+{"level":"info","timestamp":"2025-10-29T14:38:25+05:30","logger":"POC/main.go:176","msg":"connecting to localhost:8010, tls=false","version":"unknown","backoff":"1s"}
+{"level":"info","timestamp":"2025-10-29T14:38:25+05:30","logger":"controller/agent.go:113","msg":"connected with success to localhost:8010"}
+{"level":"info","timestamp":"2025-10-29T14:39:07+05:30","logger":"POC/main.go:208","msg":"disconnected from localhost:8010, reason=rpc error: code = Unavailable desc = error reading from server: EOF","version":"unknown","backoff":"1s","status":"Unavailable"}
+{"level":"info","timestamp":"2025-10-29T14:39:07+05:30","logger":"controller/agent.go:86","msg":"shutting down agent controller"}
+{"level":"info","timestamp":"2025-10-29T14:39:07+05:30","logger":"POC/proc.go:81","msg":"cleaning agent instance, reason=received signal 'terminated' from the operating system"}

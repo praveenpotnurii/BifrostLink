@@ -1,0 +1,14 @@
+2025/10/29 14:38:15 Starting Hoop Gateway Server...
+2025/10/29 14:38:15 Gateway listening on :8010 (insecure mode)
+2025/10/29 14:38:15 Agents can connect using: HOOP_KEY="grpc://test-token-123@localhost:8010"
+2025/10/29 14:38:25 Auth: Received authorization header: Bearer grpc://agent1:test-token-123@localhost:8010
+2025/10/29 14:38:25 Auth: Extracted token (first 40 chars): grpc://agent1:test-token-123@localhost:8...
+2025/10/29 14:38:25 Auth: Extracted secret key from DSN: test-token-123...
+2025/10/29 14:38:25 Auth: Token validated successfully
+2025/10/29 14:38:25 Agent connected: id=agent-default, origin=agent, connection=
+2025/10/29 14:38:25 Sent GatewayConnectOK to agent: id=agent-default
+2025/10/29 14:38:25 Received packet from agent agent-default: type=GatewayKeepAlive, payload_size=0
+2025/10/29 14:38:35 Received packet from agent agent-default: type=GatewayKeepAlive, payload_size=0
+2025/10/29 14:38:45 Received packet from agent agent-default: type=GatewayKeepAlive, payload_size=0
+2025/10/29 14:38:55 Received packet from agent agent-default: type=GatewayKeepAlive, payload_size=0
+2025/10/29 14:39:05 Received packet from agent agent-default: type=GatewayKeepAlive, payload_size=0
