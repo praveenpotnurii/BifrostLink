@@ -135,6 +135,72 @@ function App() {
 
   const parseResults = (resultsString) => {
     if (!resultsString) return { headers: [], rows: [] }
+
+    const trimmed = resultsString.trim()
+
+    // Check if the output is JSON/JavaScript object format (MongoDB, or JSON-formatted results)
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      try {
+        // Convert MongoDB/JavaScript object notation to valid JSON
+        let jsonString = trimmed
+          // Replace ObjectId("...") with just the ID string
+          .replace(/ObjectId\(['"]([^'"]+)['"]\)/g, '"$1"')
+          // Replace ISODate("...") with the date string
+          .replace(/ISODate\(['"]([^'"]+)['"]\)/g, '"$1"')
+          // Replace NumberLong(...) with the number
+          .replace(/NumberLong\((\d+)\)/g, '$1')
+          // Replace NumberInt(...) with the number
+          .replace(/NumberInt\((\d+)\)/g, '$1')
+          // Replace unquoted property names with quoted ones (for JavaScript object notation)
+          .replace(/(\w+):/g, '"$1":')
+          // Fix double-quoted quotes (from the replacements above)
+          .replace(/""+/g, '"')
+
+        // Try to parse as JSON
+        const jsonData = JSON.parse(jsonString)
+
+        // Handle array of objects (most common case)
+        if (Array.isArray(jsonData) && jsonData.length > 0) {
+          const firstItem = jsonData[0]
+          if (typeof firstItem === 'object' && firstItem !== null) {
+            // Extract headers from object keys
+            const headers = Object.keys(firstItem)
+            // Extract rows from object values
+            const rows = jsonData.map(item => headers.map(key => {
+              const val = item[key]
+              // Convert objects/arrays to JSON string for display
+              return val === null ? 'null' :
+                     typeof val === 'object' ? JSON.stringify(val) :
+                     String(val)
+            }))
+            return { headers, rows }
+          }
+        }
+
+        // Handle single object
+        if (typeof jsonData === 'object' && jsonData !== null && !Array.isArray(jsonData)) {
+          const headers = Object.keys(jsonData)
+          const rows = [headers.map(key => {
+            const val = jsonData[key]
+            return val === null ? 'null' :
+                   typeof val === 'object' ? JSON.stringify(val) :
+                   String(val)
+          })]
+          return { headers, rows }
+        }
+
+        // Handle array of primitives
+        if (Array.isArray(jsonData)) {
+          return { headers: ['value'], rows: jsonData.map(item => [String(item)]) }
+        }
+
+      } catch (e) {
+        // If JSON parsing fails, fall through to tab-separated parsing
+        console.warn('Failed to parse as JSON/MongoDB format, trying tab-separated format', e)
+      }
+    }
+
+    // Default: parse as tab-separated values (for SQL databases)
     const lines = resultsString.split('\n').filter(line => line.trim())
     const dataLines = lines.filter(line => !line.includes('Deprecated'))
     if (dataLines.length === 0) return { headers: [], rows: [] }

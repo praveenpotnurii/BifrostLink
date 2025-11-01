@@ -206,12 +206,31 @@ func (s *gatewayServer) handleAgentConnection(stream pb.Transport_ConnectServer,
 func (s *gatewayServer) handleClientConnection(stream pb.Transport_ConnectServer, md metadata.MD) error {
 	log.Println("Client connected")
 
-	// Find first available agent
+	// Get requested agent ID from metadata
+	requestedAgentID := getMetadataValue(md, "agent-id")
+
+	// Find the requested agent or first available agent
 	var agent *AgentConnection
-	s.broker.agents.Range(func(key, value interface{}) bool {
-		agent = value.(*AgentConnection)
-		return false // Stop after first
-	})
+	if requestedAgentID != "" {
+		// Try to find the specific agent requested
+		if val, ok := s.broker.agents.Load(requestedAgentID); ok {
+			agent = val.(*AgentConnection)
+			log.Printf("Using requested agent: %s", requestedAgentID)
+		} else {
+			log.Printf("Requested agent '%s' not found, looking for alternatives", requestedAgentID)
+			// Requested agent not found, return error
+			return status.Errorf(codes.Unavailable, "requested agent '%s' is not connected", requestedAgentID)
+		}
+	} else {
+		// No specific agent requested, use first available
+		s.broker.agents.Range(func(key, value interface{}) bool {
+			agent = value.(*AgentConnection)
+			return false // Stop after first
+		})
+		if agent != nil {
+			log.Printf("No agent requested, using first available: %s", agent.agentID)
+		}
+	}
 
 	if agent == nil {
 		return status.Error(codes.Unavailable, "no agents available")
