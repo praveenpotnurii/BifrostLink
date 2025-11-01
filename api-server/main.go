@@ -32,7 +32,8 @@ var (
 )
 
 type ExecuteQueryRequest struct {
-	Query string `json:"query"`
+	Query      string `json:"query"`
+	DatabaseID int    `json:"database_id"`
 }
 
 type ExecuteQueryResponse struct {
@@ -43,8 +44,21 @@ type ExecuteQueryResponse struct {
 }
 
 // executeQuery sends a query to the gateway and returns results
-func executeQuery(query string) (*ExecuteQueryResponse, error) {
+func executeQuery(query string, databaseID int) (*ExecuteQueryResponse, error) {
 	startTime := time.Now()
+
+	// Fetch database credentials from the databases table
+	var dbConfig Database
+	err := db.QueryRow(`
+		SELECT id, database_name, agent_id, host, port, username, password, db_name
+		FROM databases
+		WHERE id = $1
+	`, databaseID).Scan(&dbConfig.ID, &dbConfig.DatabaseName, &dbConfig.AgentID, &dbConfig.Host,
+		&dbConfig.Port, &dbConfig.Username, &dbConfig.Password, &dbConfig.DBName)
+
+	if err != nil {
+		return nil, fmt.Errorf("database not found or invalid database_id: %v", err)
+	}
 
 	// Connect to gateway
 	conn, err := grpc.Dial(gatewayAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -56,10 +70,11 @@ func executeQuery(query string) (*ExecuteQueryResponse, error) {
 	client := pb.NewTransportClient(conn)
 
 	// Create client stream with origin and authentication metadata
+	// Use the agent_id from the database configuration
 	md := metadata.New(map[string]string{
 		"origin":          "client",
 		"connection-name": "web-client",
-		"agent-id":        "web-api",
+		"agent-id":        dbConfig.AgentID,
 		"authorization":   "Bearer test-token-123",
 	})
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
@@ -69,7 +84,7 @@ func executeQuery(query string) (*ExecuteQueryResponse, error) {
 		return nil, fmt.Errorf("failed to create stream: %v", err)
 	}
 
-	// Prepare connection parameters
+	// Prepare connection parameters using database credentials
 	connParams := &pb.AgentConnectionParams{
 		ConnectionName: "mysql-connection",
 		ConnectionType: "mysql",
@@ -78,11 +93,11 @@ func executeQuery(query string) (*ExecuteQueryResponse, error) {
 		ClientOrigin:   pb.ConnectionOriginClientAPI,
 		ClientVerb:     pb.ClientVerbExec,
 		EnvVars: map[string]any{
-			"envvar:HOST": base64Encode("mysql"),
-			"envvar:PORT": base64Encode("3306"),
-			"envvar:USER": base64Encode("root"),
-			"envvar:PASS": base64Encode("rootpassword"),
-			"envvar:DB":   base64Encode("testdb"),
+			"envvar:HOST": base64Encode(dbConfig.Host),
+			"envvar:PORT": base64Encode(dbConfig.Port),
+			"envvar:USER": base64Encode(dbConfig.Username),
+			"envvar:PASS": base64Encode(dbConfig.Password),
+			"envvar:DB":   base64Encode(dbConfig.DBName),
 		},
 	}
 
@@ -179,9 +194,14 @@ func handleExecuteQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("Executing query: %s", req.Query)
+	if req.DatabaseID == 0 {
+		http.Error(w, "Database ID is required", http.StatusBadRequest)
+		return
+	}
 
-	resp, err := executeQuery(req.Query)
+	log.Printf("Executing query on database_id=%d: %s", req.DatabaseID, req.Query)
+
+	resp, err := executeQuery(req.Query, req.DatabaseID)
 	if err != nil {
 		resp = &ExecuteQueryResponse{
 			Error:    err.Error(),
@@ -260,6 +280,30 @@ func main() {
 		}
 	})
 
+	// Database management endpoints
+	mux.HandleFunc("/api/databases", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handleGetDatabases(w, r)
+		case http.MethodPost:
+			handleCreateDatabase(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/databases/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handleGetDatabase(w, r)
+		case http.MethodPut:
+			handleUpdateDatabase(w, r)
+		case http.MethodDelete:
+			handleDeleteDatabase(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	// Health check
 	mux.HandleFunc("/health", handleHealth)
 
@@ -286,6 +330,12 @@ func main() {
 	log.Println("   - GET    /api/agents/:id")
 	log.Println("   - PUT    /api/agents/:id")
 	log.Println("   - DELETE /api/agents/:id")
+	log.Println("   Database Management:")
+	log.Println("   - GET    /api/databases")
+	log.Println("   - POST   /api/databases")
+	log.Println("   - GET    /api/databases/:id")
+	log.Println("   - PUT    /api/databases/:id")
+	log.Println("   - DELETE /api/databases/:id")
 	log.Println("   Health:")
 	log.Println("   - GET    /health")
 	log.Fatal(http.ListenAndServe(":8080", handler))

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Play, Database, AlertCircle, CheckCircle2, Loader2, Copy, Trash2, Users, Plus, Edit, X, Activity, Circle } from 'lucide-react'
+import { Play, Database, AlertCircle, CheckCircle2, Loader2, Copy, Trash2, Users, Plus, Edit, X, Activity, Circle, Server } from 'lucide-react'
 import { cn } from './lib/utils'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
@@ -8,7 +8,7 @@ function App() {
   // Initialize activeTab from URL hash, default to 'sql'
   const getInitialTab = () => {
     const hash = window.location.hash.slice(1) // Remove the '#'
-    return ['sql', 'users', 'agents'].includes(hash) ? hash : 'sql'
+    return ['sql', 'users', 'agents', 'databases'].includes(hash) ? hash : 'sql'
   }
 
   const [activeTab, setActiveTab] = useState(getInitialTab())
@@ -17,6 +17,7 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [copied, setCopied] = useState(false)
+  const [selectedDatabaseId, setSelectedDatabaseId] = useState(null)
 
   // User Management State
   const [users, setUsers] = useState([])
@@ -37,11 +38,20 @@ function App() {
   const [agentSuccess, setAgentSuccess] = useState(null)
   const [dockerCmdCopied, setDockerCmdCopied] = useState(false)
 
+  // Database Management State
+  const [databases, setDatabases] = useState([])
+  const [loadingDatabases, setLoadingDatabases] = useState(false)
+  const [showDatabaseModal, setShowDatabaseModal] = useState(false)
+  const [editingDatabase, setEditingDatabase] = useState(null)
+  const [databaseForm, setDatabaseForm] = useState({ database_name: '', agent_id: '', host: '', port: '3306', username: '', password: '', db_name: '', description: '' })
+  const [databaseError, setDatabaseError] = useState(null)
+  const [databaseSuccess, setDatabaseSuccess] = useState(null)
+
   // Listen to hash changes (for browser back/forward navigation)
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.slice(1)
-      if (['sql', 'users', 'agents'].includes(hash)) {
+      if (['sql', 'users', 'agents', 'databases'].includes(hash)) {
         setActiveTab(hash)
       }
     }
@@ -55,6 +65,11 @@ function App() {
       fetchUsers()
     } else if (activeTab === 'agents') {
       fetchAgents()
+    } else if (activeTab === 'databases') {
+      fetchDatabases()
+      fetchAgents() // Need agents for the dropdown
+    } else if (activeTab === 'sql') {
+      fetchDatabases() // Need databases for SQL Console dropdown
     }
   }, [activeTab])
 
@@ -70,6 +85,11 @@ function App() {
       return
     }
 
+    if (!selectedDatabaseId) {
+      setError('Please select a database')
+      return
+    }
+
     setLoading(true)
     setError(null)
     setResults(null)
@@ -78,7 +98,7 @@ function App() {
       const response = await fetch(`${API_BASE_URL}/api/execute-query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query, database_id: selectedDatabaseId }),
       })
 
       const data = await response.json()
@@ -233,7 +253,11 @@ function App() {
   const openAgentModal = (agent = null) => {
     if (agent) {
       setEditingAgent(agent)
-      setAgentForm({ agent_id: agent.agent_id, name: agent.name, description: agent.description })
+      // Strip "agent-" prefix when editing to show only the user's input
+      const agentIdWithoutPrefix = agent.agent_id.startsWith('agent-')
+        ? agent.agent_id.substring(6)
+        : agent.agent_id
+      setAgentForm({ agent_id: agentIdWithoutPrefix, name: agent.name, description: agent.description })
     } else {
       setEditingAgent(null)
       setAgentForm({ agent_id: '', name: '', description: '' })
@@ -258,6 +282,9 @@ function App() {
       return
     }
 
+    // Prepend "agent-" to the user's input for the full agent_id
+    const fullAgentId = `agent-${agentForm.agent_id}`
+
     try {
       const url = editingAgent
         ? `${API_BASE_URL}/api/agents/${editingAgent.id}`
@@ -268,7 +295,10 @@ function App() {
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(agentForm),
+        body: JSON.stringify({
+          ...agentForm,
+          agent_id: fullAgentId
+        }),
       })
 
       const data = await response.json()
@@ -315,26 +345,134 @@ function App() {
     setTimeout(() => setDockerCmdCopied(false), 2000)
   }
 
-  const generateDockerCommands = (agentId) => {
-    if (!agentId) return {}
+  const generateDockerCommands = (agentIdSuffix) => {
+    if (!agentIdSuffix) return {}
     const token = 'test-token-123'
+    // User only provides the suffix, so we use it directly in BIFROST_KEY
+    // Gateway will add "agent-" prefix, resulting in "agent-{suffix}"
+    const fullAgentId = `agent-${agentIdSuffix}`
 
     return {
       sameNetwork: `docker run -d \\
-  --name ${agentId} \\
-  -e BIFROST_KEY=grpc://${agentId}:${token}@gateway:8010 \\
+  --name ${fullAgentId} \\
+  -e BIFROST_KEY=grpc://${agentIdSuffix}:${token}@gateway:8010 \\
   --network bifrostlink_default \\
   bifrostlink-agent`,
 
       sameHost: `docker run -d \\
-  --name ${agentId} \\
-  -e BIFROST_KEY=grpc://${agentId}:${token}@host.docker.internal:8010 \\
+  --name ${fullAgentId} \\
+  -e BIFROST_KEY=grpc://${agentIdSuffix}:${token}@host.docker.internal:8010 \\
   bifrostlink-agent`,
 
       differentHost: `docker run -d \\
-  --name ${agentId} \\
-  -e BIFROST_KEY=grpc://${agentId}:${token}@YOUR_GATEWAY_IP:8010 \\
+  --name ${fullAgentId} \\
+  -e BIFROST_KEY=grpc://${agentIdSuffix}:${token}@YOUR_GATEWAY_IP:8010 \\
   bifrostlink-agent`
+    }
+  }
+
+  // Database Management Functions
+  const fetchDatabases = async () => {
+    setLoadingDatabases(true)
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/databases`)
+      const data = await response.json()
+      setDatabases(data || [])
+      if (data && data.length > 0 && !selectedDatabaseId) {
+        setSelectedDatabaseId(data[0].id)
+      }
+    } catch (err) {
+      setDatabaseError('Failed to fetch databases')
+    } finally {
+      setLoadingDatabases(false)
+    }
+  }
+
+  const openDatabaseModal = (database = null) => {
+    if (database) {
+      setEditingDatabase(database)
+      setDatabaseForm({
+        database_name: database.database_name,
+        agent_id: database.agent_id,
+        host: database.host,
+        port: database.port,
+        username: database.username,
+        password: database.password,
+        db_name: database.db_name,
+        description: database.description
+      })
+    } else {
+      setEditingDatabase(null)
+      setDatabaseForm({ database_name: '', agent_id: '', host: '', port: '3306', username: '', password: '', db_name: '', description: '' })
+    }
+    setShowDatabaseModal(true)
+    setDatabaseError(null)
+  }
+
+  const closeDatabaseModal = () => {
+    setShowDatabaseModal(false)
+    setEditingDatabase(null)
+    setDatabaseForm({ database_name: '', agent_id: '', host: '', port: '3306', username: '', password: '', db_name: '', description: '' })
+    setDatabaseError(null)
+  }
+
+  const handleDatabaseSubmit = async (e) => {
+    e.preventDefault()
+    setDatabaseError(null)
+
+    if (!databaseForm.database_name || !databaseForm.agent_id || !databaseForm.host || !databaseForm.port || !databaseForm.username || !databaseForm.db_name) {
+      setDatabaseError('All required fields must be filled')
+      return
+    }
+
+    try {
+      const url = editingDatabase
+        ? `${API_BASE_URL}/api/databases/${editingDatabase.id}`
+        : `${API_BASE_URL}/api/databases`
+
+      const method = editingDatabase ? 'PUT' : 'POST'
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(databaseForm),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setDatabaseError(data.error || 'Failed to save database')
+        return
+      }
+
+      setDatabaseSuccess(editingDatabase ? 'Database updated successfully' : 'Database created successfully')
+      setTimeout(() => setDatabaseSuccess(null), 3000)
+      closeDatabaseModal()
+      fetchDatabases()
+    } catch (err) {
+      setDatabaseError('Failed to save database: ' + err.message)
+    }
+  }
+
+  const handleDeleteDatabase = async (databaseId) => {
+    if (!confirm('Are you sure you want to delete this database?')) return
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/databases/${databaseId}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        setDatabaseError(data.error || 'Failed to delete database')
+        return
+      }
+
+      setDatabaseSuccess('Database deleted successfully')
+      setTimeout(() => setDatabaseSuccess(null), 3000)
+      fetchDatabases()
+    } catch (err) {
+      setDatabaseError('Failed to delete database: ' + err.message)
     }
   }
 
@@ -394,6 +532,20 @@ function App() {
                 Agent Management
               </div>
             </button>
+            <button
+              onClick={() => changeTab('databases')}
+              className={cn(
+                "px-4 py-2 font-medium text-sm transition-colors border-b-2",
+                activeTab === 'databases'
+                  ? "border-black text-black"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <Server className="w-4 h-4" />
+                Database Management
+              </div>
+            </button>
           </div>
         </div>
       </header>
@@ -403,6 +555,23 @@ function App() {
         {/* SQL Console Tab */}
         {activeTab === 'sql' && (
           <>
+            {/* Database Selector */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium mb-2">Select Database</label>
+              <select
+                value={selectedDatabaseId || ''}
+                onChange={(e) => setSelectedDatabaseId(Number(e.target.value))}
+                className="w-full md:w-64 px-3 py-2 border border-black rounded-md focus:outline-none focus:ring-2 focus:ring-black"
+              >
+                <option value="">Choose a database...</option>
+                {databases.map((db) => (
+                  <option key={db.id} value={db.id}>
+                    {db.database_name} ({db.agent_id})
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Query Editor */}
             <div className="border border-black rounded-lg overflow-hidden mb-6">
               <div className="bg-black text-white px-4 py-2 flex items-center justify-between">
@@ -754,6 +923,106 @@ function App() {
             )}
           </>
         )}
+
+        {/* Database Management Tab */}
+        {activeTab === 'databases' && (
+          <>
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-2xl font-bold">Database Management</h2>
+              <button
+                onClick={() => openDatabaseModal()}
+                className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add Database
+              </button>
+            </div>
+
+            {databaseSuccess && (
+              <div className="mb-4 p-3 border border-black rounded-md bg-black text-white text-sm">
+                ✓ {databaseSuccess}
+              </div>
+            )}
+
+            {databaseError && (
+              <div className="mb-4 p-4 border border-black rounded-lg bg-white">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-gray-700">{databaseError}</p>
+                </div>
+              </div>
+            )}
+
+            {loadingDatabases ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin" />
+              </div>
+            ) : databases.length === 0 ? (
+              <div className="border border-dashed border-gray-300 rounded-lg p-12 text-center">
+                <Server className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                <h3 className="text-lg font-semibold mb-2">No databases configured</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Add your first database to start querying
+                </p>
+                <button
+                  onClick={() => openDatabaseModal()}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Database
+                </button>
+              </div>
+            ) : (
+              <div className="border border-black rounded-lg overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-black text-white">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">ID</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Database Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Agent</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Host</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Port</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">DB Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Created</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {databases.map((database) => (
+                      <tr key={database.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 text-sm font-mono">{database.id}</td>
+                        <td className="px-4 py-3 text-sm font-medium">{database.database_name}</td>
+                        <td className="px-4 py-3 text-sm font-mono">{database.agent_id}</td>
+                        <td className="px-4 py-3 text-sm">{database.host}</td>
+                        <td className="px-4 py-3 text-sm">{database.port}</td>
+                        <td className="px-4 py-3 text-sm">{database.db_name}</td>
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          {new Date(database.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right">
+                          <button
+                            onClick={() => openDatabaseModal(database)}
+                            className="inline-flex items-center gap-1 px-3 py-1 text-sm border border-black rounded hover:bg-black hover:text-white transition-colors mr-2"
+                          >
+                            <Edit className="w-3 h-3" />
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteDatabase(database.id)}
+                            className="inline-flex items-center gap-1 px-3 py-1 text-sm border border-black rounded hover:bg-red-600 hover:border-red-600 hover:text-white transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
       </main>
 
       {/* User Modal */}
@@ -854,16 +1123,19 @@ function App() {
             <form onSubmit={handleAgentSubmit} className="p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Agent ID</label>
-                <input
-                  type="text"
-                  value={agentForm.agent_id}
-                  onChange={(e) => setAgentForm({ ...agentForm, agent_id: e.target.value })}
-                  className="w-full px-3 py-2 border border-black rounded-md focus:outline-none focus:ring-2 focus:ring-black"
-                  placeholder="agent-agent1"
-                  required
-                  disabled={editingAgent}
-                />
-                <p className="mt-1 text-xs text-gray-500">Unique identifier for the agent</p>
+                <div className="flex items-center border border-black rounded-md overflow-hidden focus-within:ring-2 focus-within:ring-black">
+                  <span className="px-3 py-2 bg-gray-100 text-gray-600 font-medium select-none">agent-</span>
+                  <input
+                    type="text"
+                    value={agentForm.agent_id}
+                    onChange={(e) => setAgentForm({ ...agentForm, agent_id: e.target.value })}
+                    className="flex-1 px-3 py-2 focus:outline-none"
+                    placeholder="test1"
+                    required
+                    disabled={editingAgent}
+                  />
+                </div>
+                <p className="mt-1 text-xs text-gray-500">Only enter the unique part after "agent-"</p>
               </div>
 
               <div>
@@ -973,6 +1245,152 @@ function App() {
                 <button
                   type="button"
                   onClick={closeAgentModal}
+                  className="flex-1 px-4 py-2 border border-black rounded-md hover:bg-gray-100 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Database Modal */}
+      {showDatabaseModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white border border-black rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-black sticky top-0 bg-white">
+              <h3 className="text-lg font-bold">
+                {editingDatabase ? 'Edit Database' : 'Add New Database'}
+              </h3>
+              <button
+                onClick={closeDatabaseModal}
+                className="p-1 hover:bg-gray-100 rounded transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleDatabaseSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Database Name *</label>
+                <input
+                  type="text"
+                  value={databaseForm.database_name}
+                  onChange={(e) => setDatabaseForm({ ...databaseForm, database_name: e.target.value })}
+                  className="w-full px-3 py-2 border border-black rounded-md focus:outline-none focus:ring-2 focus:ring-black"
+                  placeholder="Production MySQL"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Agent *</label>
+                <select
+                  value={databaseForm.agent_id}
+                  onChange={(e) => setDatabaseForm({ ...databaseForm, agent_id: e.target.value })}
+                  className="w-full px-3 py-2 border border-black rounded-md focus:outline-none focus:ring-2 focus:ring-black"
+                  required
+                >
+                  <option value="">Select an agent...</option>
+                  {agents.map((agent) => (
+                    <option key={agent.agent_id} value={agent.agent_id}>
+                      {agent.name} ({agent.agent_id})
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">Choose which agent will handle queries for this database</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Host *</label>
+                <input
+                  type="text"
+                  value={databaseForm.host}
+                  onChange={(e) => setDatabaseForm({ ...databaseForm, host: e.target.value })}
+                  className="w-full px-3 py-2 border border-black rounded-md focus:outline-none focus:ring-2 focus:ring-black"
+                  placeholder="mysql or 192.168.1.100"
+                  required
+                />
+                <p className="mt-1 text-xs text-gray-500">MySQL server hostname or IP address</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Port *</label>
+                <input
+                  type="text"
+                  value={databaseForm.port}
+                  onChange={(e) => setDatabaseForm({ ...databaseForm, port: e.target.value })}
+                  className="w-full px-3 py-2 border border-black rounded-md focus:outline-none focus:ring-2 focus:ring-black"
+                  placeholder="3306"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Username *</label>
+                <input
+                  type="text"
+                  value={databaseForm.username}
+                  onChange={(e) => setDatabaseForm({ ...databaseForm, username: e.target.value })}
+                  className="w-full px-3 py-2 border border-black rounded-md focus:outline-none focus:ring-2 focus:ring-black"
+                  placeholder="root"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Password</label>
+                <input
+                  type="password"
+                  value={databaseForm.password}
+                  onChange={(e) => setDatabaseForm({ ...databaseForm, password: e.target.value })}
+                  className="w-full px-3 py-2 border border-black rounded-md focus:outline-none focus:ring-2 focus:ring-black"
+                  placeholder="••••••••"
+                />
+                <p className="mt-1 text-xs text-gray-500">Leave blank if no password is required</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Database Name *</label>
+                <input
+                  type="text"
+                  value={databaseForm.db_name}
+                  onChange={(e) => setDatabaseForm({ ...databaseForm, db_name: e.target.value })}
+                  className="w-full px-3 py-2 border border-black rounded-md focus:outline-none focus:ring-2 focus:ring-black"
+                  placeholder="testdb"
+                  required
+                />
+                <p className="mt-1 text-xs text-gray-500">The specific database to connect to on the MySQL server</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Description</label>
+                <textarea
+                  value={databaseForm.description}
+                  onChange={(e) => setDatabaseForm({ ...databaseForm, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-black rounded-md focus:outline-none focus:ring-2 focus:ring-black"
+                  placeholder="Production database for customer data"
+                  rows={3}
+                />
+              </div>
+
+              {databaseError && (
+                <div className="p-3 border border-red-500 rounded-md bg-red-50 text-red-700 text-sm">
+                  {databaseError}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
+                >
+                  {editingDatabase ? 'Update Database' : 'Create Database'}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeDatabaseModal}
                   className="flex-1 px-4 py-2 border border-black rounded-md hover:bg-gray-100 transition-colors"
                 >
                   Cancel
