@@ -5,12 +5,17 @@ import { cn } from './lib/utils'
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 
 function App() {
-  const [activeTab, setActiveTab] = useState('sql')
+  // Initialize activeTab from URL hash, default to 'sql'
+  const getInitialTab = () => {
+    const hash = window.location.hash.slice(1) // Remove the '#'
+    return ['sql', 'users', 'agents'].includes(hash) ? hash : 'sql'
+  }
+
+  const [activeTab, setActiveTab] = useState(getInitialTab())
   const [query, setQuery] = useState('SELECT * FROM users;')
   const [results, setResults] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-  const [agentStatus, setAgentStatus] = useState({ connected: false, message: 'Checking...' })
   const [copied, setCopied] = useState(false)
 
   // User Management State
@@ -31,10 +36,17 @@ function App() {
   const [agentError, setAgentError] = useState(null)
   const [agentSuccess, setAgentSuccess] = useState(null)
 
+  // Listen to hash changes (for browser back/forward navigation)
   useEffect(() => {
-    checkAgentStatus()
-    const interval = setInterval(checkAgentStatus, 10000)
-    return () => clearInterval(interval)
+    const handleHashChange = () => {
+      const hash = window.location.hash.slice(1)
+      if (['sql', 'users', 'agents'].includes(hash)) {
+        setActiveTab(hash)
+      }
+    }
+
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
   }, [])
 
   useEffect(() => {
@@ -45,14 +57,10 @@ function App() {
     }
   }, [activeTab])
 
-  const checkAgentStatus = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/agent-status`)
-      const data = await response.json()
-      setAgentStatus(data)
-    } catch (err) {
-      setAgentStatus({ connected: false, message: 'API unreachable' })
-    }
+  // Function to change tabs and update URL hash
+  const changeTab = (tab) => {
+    setActiveTab(tab)
+    window.location.hash = tab
   }
 
   const executeQuery = async () => {
@@ -307,31 +315,15 @@ function App() {
       {/* Header */}
       <header className="border-b border-black">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Database className="w-6 h-6" />
-              <h1 className="text-2xl font-bold tracking-tight">BifrostLink</h1>
-            </div>
-
-            {/* Agent Status */}
-            <div className={cn(
-              "flex items-center gap-2 px-3 py-1.5 border rounded-md text-sm font-medium",
-              agentStatus.connected
-                ? "border-black bg-black text-white"
-                : "border-black bg-white text-black"
-            )}>
-              <div className={cn(
-                "w-2 h-2 rounded-full",
-                agentStatus.connected ? "bg-white" : "bg-black"
-              )} />
-              <span>{agentStatus.connected ? 'Connected' : 'Disconnected'}</span>
-            </div>
+          <div className="flex items-center gap-3">
+            <Database className="w-6 h-6" />
+            <h1 className="text-2xl font-bold tracking-tight">BifrostLink</h1>
           </div>
 
           {/* Tabs */}
           <div className="flex gap-4 mt-4 border-b border-gray-200">
             <button
-              onClick={() => setActiveTab('sql')}
+              onClick={() => changeTab('sql')}
               className={cn(
                 "px-4 py-2 font-medium text-sm transition-colors border-b-2",
                 activeTab === 'sql'
@@ -345,7 +337,7 @@ function App() {
               </div>
             </button>
             <button
-              onClick={() => setActiveTab('users')}
+              onClick={() => changeTab('users')}
               className={cn(
                 "px-4 py-2 font-medium text-sm transition-colors border-b-2",
                 activeTab === 'users'
@@ -359,7 +351,7 @@ function App() {
               </div>
             </button>
             <button
-              onClick={() => setActiveTab('agents')}
+              onClick={() => changeTab('agents')}
               className={cn(
                 "px-4 py-2 font-medium text-sm transition-colors border-b-2",
                 activeTab === 'agents'
@@ -419,11 +411,11 @@ function App() {
                 </div>
                 <button
                   onClick={executeQuery}
-                  disabled={loading || !agentStatus.connected}
+                  disabled={loading}
                   className={cn(
                     "flex items-center gap-2 px-4 py-2 rounded-md font-medium transition-all",
                     "disabled:opacity-50 disabled:cursor-not-allowed",
-                    loading || !agentStatus.connected
+                    loading
                       ? "bg-gray-200 text-gray-500"
                       : "bg-black text-white hover:bg-gray-800"
                   )}

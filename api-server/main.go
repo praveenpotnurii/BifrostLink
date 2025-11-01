@@ -42,12 +42,6 @@ type ExecuteQueryResponse struct {
 	Duration string `json:"duration"`
 }
 
-type AgentStatusResponse struct {
-	Connected bool   `json:"connected"`
-	AgentID   string `json:"agentId"`
-	Message   string `json:"message"`
-}
-
 // executeQuery sends a query to the gateway and returns results
 func executeQuery(query string) (*ExecuteQueryResponse, error) {
 	startTime := time.Now()
@@ -167,28 +161,6 @@ func executeQuery(query string) (*ExecuteQueryResponse, error) {
 	}, nil
 }
 
-// checkAgentStatus checks if agent is connected to gateway
-func checkAgentStatus() *AgentStatusResponse {
-	// For now, we'll do a simple connection test
-	// In production, the gateway would expose an agent registry endpoint
-	conn, err := grpc.Dial(gatewayAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		return &AgentStatusResponse{
-			Connected: false,
-			Message:   fmt.Sprintf("Gateway unreachable: %v", err),
-		}
-	}
-	defer conn.Close()
-
-	// If we can connect to gateway, assume agent is connected
-	// This is simplified - ideally gateway would have an API to check agent status
-	return &AgentStatusResponse{
-		Connected: true,
-		AgentID:   "agent-default",
-		Message:   "Agent connected and ready",
-	}
-}
-
 // HTTP Handlers
 func handleExecuteQuery(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -221,18 +193,6 @@ func handleExecuteQuery(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-func handleAgentStatus(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	status := checkAgentStatus()
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(status)
-}
-
 func handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
@@ -251,7 +211,6 @@ func main() {
 
 	// Query execution endpoints
 	mux.HandleFunc("/api/execute-query", handleExecuteQuery)
-	mux.HandleFunc("/api/agent-status", handleAgentStatus)
 
 	// User management endpoints
 	mux.HandleFunc("/api/users", func(w http.ResponseWriter, r *http.Request) {
@@ -315,7 +274,6 @@ func main() {
 	log.Println("🚀 REST API Server starting on :8080")
 	log.Println("   Query Execution:")
 	log.Println("   - POST   /api/execute-query")
-	log.Println("   - GET    /api/agent-status")
 	log.Println("   User Management:")
 	log.Println("   - GET    /api/users")
 	log.Println("   - POST   /api/users")
