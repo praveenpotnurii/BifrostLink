@@ -50,10 +50,10 @@ func executeQuery(query string, databaseID int) (*ExecuteQueryResponse, error) {
 	// Fetch database credentials from the databases table
 	var dbConfig Database
 	err := db.QueryRow(`
-		SELECT id, database_name, agent_id, host, port, username, password, db_name
+		SELECT id, database_name, type, agent_id, host, port, username, password, db_name
 		FROM databases
 		WHERE id = $1
-	`, databaseID).Scan(&dbConfig.ID, &dbConfig.DatabaseName, &dbConfig.AgentID, &dbConfig.Host,
+	`, databaseID).Scan(&dbConfig.ID, &dbConfig.DatabaseName, &dbConfig.Type, &dbConfig.AgentID, &dbConfig.Host,
 		&dbConfig.Port, &dbConfig.Username, &dbConfig.Password, &dbConfig.DBName)
 
 	if err != nil {
@@ -86,8 +86,8 @@ func executeQuery(query string, databaseID int) (*ExecuteQueryResponse, error) {
 
 	// Prepare connection parameters using database credentials
 	connParams := &pb.AgentConnectionParams{
-		ConnectionName: "mysql-connection",
-		ConnectionType: "mysql",
+		ConnectionName: dbConfig.DatabaseName,
+		ConnectionType: dbConfig.Type,  // Use dynamic database type (mysql, postgres, mssql, mongodb)
 		UserID:         "web-user",
 		UserEmail:      "web@example.com",
 		ClientOrigin:   pb.ConnectionOriginClientAPI,

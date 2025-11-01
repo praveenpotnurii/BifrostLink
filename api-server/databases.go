@@ -10,6 +10,7 @@ import (
 type Database struct {
 	ID           int    `json:"id"`
 	DatabaseName string `json:"database_name"`
+	Type         string `json:"type"`
 	AgentID      string `json:"agent_id"`
 	Host         string `json:"host"`
 	Port         string `json:"port"`
@@ -24,7 +25,7 @@ type Database struct {
 // GET /api/databases - Get all databases
 func handleGetDatabases(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.Query(`
-		SELECT id, database_name, agent_id, host, port, username, password, db_name, description, created_at, updated_at
+		SELECT id, database_name, type, agent_id, host, port, username, password, db_name, description, created_at, updated_at
 		FROM databases
 		ORDER BY created_at DESC
 	`)
@@ -37,7 +38,7 @@ func handleGetDatabases(w http.ResponseWriter, r *http.Request) {
 	databases := []Database{}
 	for rows.Next() {
 		var database Database
-		err := rows.Scan(&database.ID, &database.DatabaseName, &database.AgentID, &database.Host, &database.Port,
+		err := rows.Scan(&database.ID, &database.DatabaseName, &database.Type, &database.AgentID, &database.Host, &database.Port,
 			&database.Username, &database.Password, &database.DBName, &database.Description,
 			&database.CreatedAt, &database.UpdatedAt)
 		if err != nil {
@@ -62,10 +63,10 @@ func handleGetDatabase(w http.ResponseWriter, r *http.Request) {
 
 	var database Database
 	err = db.QueryRow(`
-		SELECT id, database_name, agent_id, host, port, username, password, db_name, description, created_at, updated_at
+		SELECT id, database_name, type, agent_id, host, port, username, password, db_name, description, created_at, updated_at
 		FROM databases
 		WHERE id = $1
-	`, id).Scan(&database.ID, &database.DatabaseName, &database.AgentID, &database.Host, &database.Port,
+	`, id).Scan(&database.ID, &database.DatabaseName, &database.Type, &database.AgentID, &database.Host, &database.Port,
 		&database.Username, &database.Password, &database.DBName, &database.Description,
 		&database.CreatedAt, &database.UpdatedAt)
 
@@ -87,17 +88,31 @@ func handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate required fields
-	if database.DatabaseName == "" || database.AgentID == "" || database.Host == "" ||
+	if database.DatabaseName == "" || database.Type == "" || database.AgentID == "" || database.Host == "" ||
 		database.Port == "" || database.Username == "" || database.DBName == "" {
 		http.Error(w, "Missing required fields", http.StatusBadRequest)
 		return
 	}
 
+	// Validate database type
+	validTypes := []string{"mysql", "postgres", "mssql", "mongodb"}
+	isValidType := false
+	for _, t := range validTypes {
+		if database.Type == t {
+			isValidType = true
+			break
+		}
+	}
+	if !isValidType {
+		http.Error(w, "Invalid database type. Must be one of: mysql, postgres, mssql, mongodb", http.StatusBadRequest)
+		return
+	}
+
 	err := db.QueryRow(`
-		INSERT INTO databases (database_name, agent_id, host, port, username, password, db_name, description)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO databases (database_name, type, agent_id, host, port, username, password, db_name, description)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, created_at, updated_at
-	`, database.DatabaseName, database.AgentID, database.Host, database.Port,
+	`, database.DatabaseName, database.Type, database.AgentID, database.Host, database.Port,
 		database.Username, database.Password, database.DBName, database.Description).
 		Scan(&database.ID, &database.CreatedAt, &database.UpdatedAt)
 
@@ -130,11 +145,27 @@ func handleUpdateDatabase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate database type if provided
+	if database.Type != "" {
+		validTypes := []string{"mysql", "postgres", "mssql", "mongodb"}
+		isValidType := false
+		for _, t := range validTypes {
+			if database.Type == t {
+				isValidType = true
+				break
+			}
+		}
+		if !isValidType {
+			http.Error(w, "Invalid database type. Must be one of: mysql, postgres, mssql, mongodb", http.StatusBadRequest)
+			return
+		}
+	}
+
 	_, err = db.Exec(`
 		UPDATE databases
-		SET database_name = $1, agent_id = $2, host = $3, port = $4, username = $5, password = $6, db_name = $7, description = $8, updated_at = NOW()
-		WHERE id = $9
-	`, database.DatabaseName, database.AgentID, database.Host, database.Port,
+		SET database_name = $1, type = $2, agent_id = $3, host = $4, port = $5, username = $6, password = $7, db_name = $8, description = $9, updated_at = NOW()
+		WHERE id = $10
+	`, database.DatabaseName, database.Type, database.AgentID, database.Host, database.Port,
 		database.Username, database.Password, database.DBName, database.Description, id)
 
 	if err != nil {

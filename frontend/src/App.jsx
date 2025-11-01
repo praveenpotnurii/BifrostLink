@@ -43,7 +43,7 @@ function App() {
   const [loadingDatabases, setLoadingDatabases] = useState(false)
   const [showDatabaseModal, setShowDatabaseModal] = useState(false)
   const [editingDatabase, setEditingDatabase] = useState(null)
-  const [databaseForm, setDatabaseForm] = useState({ database_name: '', agent_id: '', host: '', port: '3306', username: '', password: '', db_name: '', description: '' })
+  const [databaseForm, setDatabaseForm] = useState({ database_name: '', type: 'mysql', agent_id: '', host: '', port: '3306', username: '', password: '', db_name: '', description: '' })
   const [databaseError, setDatabaseError] = useState(null)
   const [databaseSuccess, setDatabaseSuccess] = useState(null)
 
@@ -393,6 +393,7 @@ function App() {
       setEditingDatabase(database)
       setDatabaseForm({
         database_name: database.database_name,
+        type: database.type || 'mysql',
         agent_id: database.agent_id,
         host: database.host,
         port: database.port,
@@ -403,7 +404,7 @@ function App() {
       })
     } else {
       setEditingDatabase(null)
-      setDatabaseForm({ database_name: '', agent_id: '', host: '', port: '3306', username: '', password: '', db_name: '', description: '' })
+      setDatabaseForm({ database_name: '', type: 'mysql', agent_id: '', host: '', port: '3306', username: '', password: '', db_name: '', description: '' })
     }
     setShowDatabaseModal(true)
     setDatabaseError(null)
@@ -412,7 +413,7 @@ function App() {
   const closeDatabaseModal = () => {
     setShowDatabaseModal(false)
     setEditingDatabase(null)
-    setDatabaseForm({ database_name: '', agent_id: '', host: '', port: '3306', username: '', password: '', db_name: '', description: '' })
+    setDatabaseForm({ database_name: '', type: 'mysql', agent_id: '', host: '', port: '3306', username: '', password: '', db_name: '', description: '' })
     setDatabaseError(null)
   }
 
@@ -420,7 +421,7 @@ function App() {
     e.preventDefault()
     setDatabaseError(null)
 
-    if (!databaseForm.database_name || !databaseForm.agent_id || !databaseForm.host || !databaseForm.port || !databaseForm.username || !databaseForm.db_name) {
+    if (!databaseForm.database_name || !databaseForm.type || !databaseForm.agent_id || !databaseForm.host || !databaseForm.port || !databaseForm.username || !databaseForm.db_name) {
       setDatabaseError('All required fields must be filled')
       return
     }
@@ -979,6 +980,7 @@ function App() {
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">ID</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Database Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Type</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Agent</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Host</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Port</th>
@@ -992,6 +994,11 @@ function App() {
                       <tr key={database.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-4 py-3 text-sm font-mono">{database.id}</td>
                         <td className="px-4 py-3 text-sm font-medium">{database.database_name}</td>
+                        <td className="px-4 py-3 text-sm">
+                          <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-800">
+                            {database.type}
+                          </span>
+                        </td>
                         <td className="px-4 py-3 text-sm font-mono">{database.agent_id}</td>
                         <td className="px-4 py-3 text-sm">{database.host}</td>
                         <td className="px-4 py-3 text-sm">{database.port}</td>
@@ -1282,6 +1289,22 @@ function App() {
                   placeholder="Production MySQL"
                   required
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Database Type *</label>
+                <select
+                  value={databaseForm.type}
+                  onChange={(e) => setDatabaseForm({ ...databaseForm, type: e.target.value })}
+                  className="w-full px-3 py-2 border border-black rounded-md focus:outline-none focus:ring-2 focus:ring-black"
+                  required
+                >
+                  <option value="mysql">MySQL</option>
+                  <option value="postgres">PostgreSQL</option>
+                  <option value="mssql">Microsoft SQL Server</option>
+                  <option value="mongodb">MongoDB</option>
+                </select>
+                <p className="mt-1 text-xs text-gray-500">Select the type of database you want to connect to</p>
               </div>
 
               <div>
