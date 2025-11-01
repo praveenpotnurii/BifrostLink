@@ -5,6 +5,7 @@ go 1.23.8
 require (
 	github.com/bifrost/common v0.0.0
 	github.com/google/uuid v1.6.0
+	github.com/lib/pq v1.10.9
 	github.com/rs/cors v1.11.1
 	google.golang.org/grpc v1.71.1
 )

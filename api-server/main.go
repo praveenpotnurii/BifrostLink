@@ -241,23 +241,64 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	// Initialize database connection
+	if err := InitDB(); err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	defer CloseDB()
+
 	mux := http.NewServeMux()
 
+	// Query execution endpoints
 	mux.HandleFunc("/api/execute-query", handleExecuteQuery)
 	mux.HandleFunc("/api/agent-status", handleAgentStatus)
+
+	// User management endpoints
+	mux.HandleFunc("/api/users", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handleGetUsers(w, r)
+		case http.MethodPost:
+			handleCreateUser(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/users/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handleGetUser(w, r)
+		case http.MethodPut:
+			handleUpdateUser(w, r)
+		case http.MethodDelete:
+			handleDeleteUser(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Health check
 	mux.HandleFunc("/health", handleHealth)
 
 	// Enable CORS for React frontend
 	handler := cors.New(cors.Options{
 		AllowedOrigins:   []string{"http://localhost:5173", "http://localhost:3000"},
-		AllowedMethods:   []string{"GET", "POST", "OPTIONS"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type"},
 		AllowCredentials: true,
 	}).Handler(mux)
 
 	log.Println("🚀 REST API Server starting on :8080")
-	log.Println("   - POST /api/execute-query")
-	log.Println("   - GET  /api/agent-status")
-	log.Println("   - GET  /health")
+	log.Println("   Query Execution:")
+	log.Println("   - POST   /api/execute-query")
+	log.Println("   - GET    /api/agent-status")
+	log.Println("   User Management:")
+	log.Println("   - GET    /api/users")
+	log.Println("   - POST   /api/users")
+	log.Println("   - GET    /api/users/:id")
+	log.Println("   - PUT    /api/users/:id")
+	log.Println("   - DELETE /api/users/:id")
+	log.Println("   Health:")
+	log.Println("   - GET    /health")
 	log.Fatal(http.ListenAndServe(":8080", handler))
 }
