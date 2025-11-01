@@ -252,6 +252,18 @@ func (a *Agent) executeMySQLCommand(mysqlCmd string) ([]byte, int) {
 	return output, 0
 }
 
+func (a *Agent) executeMongoDBCommand(mongoCmd string) ([]byte, int) {
+	cmd := exec.Command("sh", "-c", mongoCmd)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return output, exitErr.ExitCode()
+		}
+		return output, 1
+	}
+	return output, 0
+}
+
 func (a *Agent) processTCPCloseConnection(pkt *pb.Packet) {
 	sessionID := pkt.Spec[pb.SpecGatewaySessionID]
 	clientConnID := pkt.Spec[pb.SpecClientConnectionID]

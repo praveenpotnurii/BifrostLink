@@ -41,6 +41,28 @@ services:
       retries: 10
     restart: unless-stopped
 
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: bifrost-mongodb
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=rootpassword
+      - MONGO_INITDB_DATABASE=testdb
+    volumes:
+      - ./mongo-init:/docker-entrypoint-initdb.d
+      - mongodb-data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - bifrost-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   # PostgreSQL Database (Application Data)
   postgres:
     image: postgres:16-alpine
@@ -116,4 +138,5 @@ networks:
 
 volumes:
   mysql-data:
+  mongodb-data:
   postgres-data:

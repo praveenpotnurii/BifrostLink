@@ -249,12 +249,12 @@ func (s *gatewayServer) handleClientConnection(stream pb.Transport_ConnectServer
 
 		switch pkt.Type {
 		case pbagent.SessionOpen:
-			// Add session ID and connection type to spec
+			// Add session ID to spec (preserve existing spec fields including SpecConnectionType)
 			if pkt.Spec == nil {
 				pkt.Spec = make(map[string][]byte)
 			}
 			pkt.Spec[pb.SpecGatewaySessionID] = []byte(sessionID)
-			pkt.Spec[pb.SpecConnectionType] = []byte(pb.ConnectionTypeMySQL)
+			// Don't override SpecConnectionType - it's already set by the API server
 
 			// Forward to agent
 			if err := agent.stream.Send(pkt); err != nil {
@@ -263,7 +263,8 @@ func (s *gatewayServer) handleClientConnection(stream pb.Transport_ConnectServer
 			}
 			log.Printf("Forwarded SessionOpen to agent for session %s", sessionID[:8])
 
-		case pbagent.ExecWriteStdin, pbagent.MySQLConnectionWrite:
+		default:
+			// Forward all other packet types to agent (MySQL, MongoDB, PostgreSQL, MSSQL, etc.)
 			// Ensure session ID is set (preserve existing spec fields)
 			if pkt.Spec == nil {
 				pkt.Spec = make(map[string][]byte)
@@ -280,9 +281,6 @@ func (s *gatewayServer) handleClientConnection(stream pb.Transport_ConnectServer
 				log.Printf("Failed to send to agent: %v", err)
 				return err
 			}
-
-		default:
-			log.Printf("Unhandled client packet type: %s", pkt.Type)
 		}
 	}
 }

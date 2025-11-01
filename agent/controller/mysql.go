@@ -50,8 +50,9 @@ func (a *Agent) processMySQLProtocol(pkt *pb.Packet) {
 	query := string(pkt.Payload)
 	log.Infof("session=%v - executing query: %s", sessionID, query)
 
-	// Execute mysql command (skip SSL for POC demo)
-	mysqlCmd := fmt.Sprintf("mysql -h%s -P%s -u%s -p%s --skip-ssl -D%s -e \"%s\" 2>&1",
+	// Execute mysql command (disable SSL for POC demo, force TCP protocol)
+	// Using --skip-ssl for compatibility with both MySQL and MariaDB clients
+	mysqlCmd := fmt.Sprintf("mysql --protocol=TCP -h%s -P%s -u%s -p%s --skip-ssl -D%s -e \"%s\" 2>&1",
 		connenv.host, connenv.port, connenv.user, connenv.pass, connenv.dbname, query)
 
 	output, exitCode := a.executeMySQLCommand(mysqlCmd)

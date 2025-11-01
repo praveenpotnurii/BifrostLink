@@ -108,12 +108,13 @@ func executeQuery(query string, databaseID int) (*ExecuteQueryResponse, error) {
 
 	sessionID := []byte(uuid.NewString())
 
-	// Send SessionOpen
+	// Send SessionOpen with connection type in spec
 	err = stream.Send(&pb.Packet{
 		Type:    pbagent.SessionOpen,
 		Payload: []byte(query),
 		Spec: map[string][]byte{
 			pb.SpecAgentConnectionParamsKey: encodedParams,
+			pb.SpecConnectionType:           []byte(dbConfig.Type),
 		},
 	})
 	if err != nil {
@@ -122,6 +123,25 @@ func executeQuery(query string, databaseID int) (*ExecuteQueryResponse, error) {
 
 	var results string
 	exitCode := 0
+
+	// Determine the correct packet types based on database type
+	var sendPacketType, receivePacketType pb.PacketType
+	switch dbConfig.Type {
+	case "mysql":
+		sendPacketType = pbagent.MySQLConnectionWrite
+		receivePacketType = pbclient.MySQLConnectionWrite
+	case "postgres":
+		sendPacketType = pbagent.PGConnectionWrite
+		receivePacketType = pbclient.PGConnectionWrite
+	case "mssql":
+		sendPacketType = pbagent.MSSQLConnectionWrite
+		receivePacketType = pbclient.MSSQLConnectionWrite
+	case "mongodb":
+		sendPacketType = pbagent.MongoDBConnectionWrite
+		receivePacketType = pbclient.MongoDBConnectionWrite
+	default:
+		return nil, fmt.Errorf("unsupported database type: %s", dbConfig.Type)
+	}
 
 	// Receive responses
 	for {
@@ -137,9 +157,9 @@ func executeQuery(query string, databaseID int) (*ExecuteQueryResponse, error) {
 		case pbclient.SessionOpenOK:
 			sessionID = pkt.Spec[pb.SpecGatewaySessionID]
 
-			// Send query via MySQLConnectionWrite
+			// Send query with the correct packet type for this database
 			err = stream.Send(&pb.Packet{
-				Type:    pbagent.MySQLConnectionWrite,
+				Type:    sendPacketType.String(),
 				Payload: []byte(query),
 				Spec: map[string][]byte{
 					pb.SpecGatewaySessionID:   sessionID,
@@ -150,7 +170,7 @@ func executeQuery(query string, databaseID int) (*ExecuteQueryResponse, error) {
 				return nil, fmt.Errorf("failed to send query: %v", err)
 			}
 
-		case pbclient.MySQLConnectionWrite:
+		case receivePacketType.String():
 			// Query results
 			results = string(pkt.Payload)
 
