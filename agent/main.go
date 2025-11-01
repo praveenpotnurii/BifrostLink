@@ -42,7 +42,7 @@ func Run() {
 
 	// default to embedded mode if it's dsn type config to keep
 	if config.Type == clientconfig.ModeDsn && config.AgentMode == pb.AgentModeEmbeddedType {
-		RunV2(&pb.PreConnectRequest{}, nil, nil)
+		RunV2(&pb.PreConnectRequest{Name: config.Name}, nil, nil)
 		return
 	}
 	handleOsInterrupt(nil)
@@ -174,7 +174,11 @@ func runDefaultMode(config *agentconfig.Config) error {
 	return backoff.Exponential2x(func(v time.Duration) error {
 		log.With("version", vi.Version, "backoff", v.String()).
 			Infof("connecting to %v, tls=%v", clientConfig.ServerAddress, !config.IsInsecure())
-		client, err := grpc.Connect(clientConfig, grpc.WithOption("origin", pb.ConnectionOriginAgent))
+		grpcOptions := []*grpc.ClientOptions{grpc.WithOption("origin", pb.ConnectionOriginAgent)}
+		if config.Name != "" {
+			grpcOptions = append(grpcOptions, grpc.WithOption("connection-name", config.Name))
+		}
+		client, err := grpc.Connect(clientConfig, grpcOptions...)
 		if err != nil {
 			log.With("version", vi.Version, "backoff", v.String()).
 				Warnf("failed to connect to %s, reason=%v", config.URL, err.Error())
