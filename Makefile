@@ -1,4 +1,4 @@
-.PHONY: help build build-nocache up down restart logs logs-gateway logs-agent logs-mysql logs-api logs-frontend status clean clean-all ps exec-gateway exec-agent exec-mysql test-db demo rebuild
+.PHONY: help build build-nocache up down restart logs logs-gateway logs-mysql logs-api logs-frontend status clean clean-all ps exec-gateway exec-mysql test-db demo rebuild
 
 # Default target
 .DEFAULT_GOAL := help
@@ -33,11 +33,6 @@ build-gateway: ## Build only gateway container (no cache)
 	@echo "$(GREEN)Building gateway container...$(NC)"
 	docker-compose build --no-cache gateway
 	@echo "$(GREEN)✓ Gateway build complete$(NC)"
-
-build-agent: ## Build only agent container (no cache)
-	@echo "$(GREEN)Building agent container...$(NC)"
-	docker-compose build --no-cache agent
-	@echo "$(GREEN)✓ Agent build complete$(NC)"
 
 build-api: ## Build only API server container (no cache)
 	@echo "$(GREEN)Building API server container...$(NC)"
@@ -93,9 +88,6 @@ logs: ## Tail logs from all containers
 logs-gateway: ## Tail logs from gateway
 	docker logs -f bifrost-gateway
 
-logs-agent: ## Tail logs from agent
-	docker logs -f bifrost-agent
-
 logs-mysql: ## Tail logs from MySQL
 	docker logs -f bifrost-mysql
 
@@ -109,9 +101,6 @@ logs-frontend: ## Tail logs from frontend
 
 exec-gateway: ## Open shell in gateway container
 	docker exec -it bifrost-gateway sh
-
-exec-agent: ## Open shell in agent container
-	docker exec -it bifrost-agent sh
 
 exec-mysql: ## Open shell in MySQL container
 	docker exec -it bifrost-mysql bash
@@ -138,19 +127,20 @@ demo: ## Run demo script to verify setup
 
 verify: ## Verify all services are healthy
 	@echo "$(CYAN)Verifying services...$(NC)"
-	@echo -n "Gateway: "
+	@echo -n "Gateway:  "
 	@docker inspect bifrost-gateway --format='{{.State.Health.Status}}' 2>/dev/null | grep -q "healthy" && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Not healthy$(NC)"
-	@echo -n "MySQL:   "
+	@echo -n "MySQL:    "
 	@docker inspect bifrost-mysql --format='{{.State.Health.Status}}' 2>/dev/null | grep -q "healthy" && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Not healthy$(NC)"
-	@echo -n "API:     "
+	@echo -n "Postgres: "
+	@docker inspect bifrost-postgres --format='{{.State.Health.Status}}' 2>/dev/null | grep -q "healthy" && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Not healthy$(NC)"
+	@echo -n "API:      "
 	@docker inspect bifrost-api-server --format='{{.State.Health.Status}}' 2>/dev/null | grep -q "healthy" && echo "$(GREEN)✓ Healthy$(NC)" || echo "$(RED)✗ Not healthy$(NC)"
-	@echo -n "Agent:   "
-	@docker ps --filter "name=bifrost-agent" --format "{{.Status}}" | grep -q "Up" && echo "$(GREEN)✓ Running$(NC)" || echo "$(RED)✗ Not running$(NC)"
+	@echo -n "Frontend: "
+	@docker ps --filter "name=bifrost-frontend" --format "{{.Status}}" | grep -q "Up" && echo "$(GREEN)✓ Running$(NC)" || echo "$(RED)✗ Not running$(NC)"
 
-check-connection: ## Check agent connection to gateway
-	@echo "$(CYAN)Checking agent connection...$(NC)"
-	@docker logs bifrost-gateway 2>&1 | grep "Agent connected" | tail -1 || echo "$(YELLOW)No agent connection found$(NC)"
-	@docker logs bifrost-agent 2>&1 | grep "connected with success" | tail -1 || echo "$(YELLOW)No successful connection logged$(NC)"
+check-connection: ## Check agent connections to gateway
+	@echo "$(CYAN)Checking agent connections...$(NC)"
+	@docker logs bifrost-gateway 2>&1 | grep "Agent connected" | tail -5 || echo "$(YELLOW)No agent connections found$(NC)"
 
 ##@ Cleanup
 
@@ -184,12 +174,6 @@ dev-gateway: ## Build and restart gateway only
 	docker-compose up -d gateway
 	@make logs-gateway
 
-dev-agent: ## Build and restart agent only
-	@echo "$(GREEN)Rebuilding agent...$(NC)"
-	@make build-agent
-	docker-compose up -d agent
-	@make logs-agent
-
 dev-api: ## Build and restart API server only
 	@echo "$(GREEN)Rebuilding API server...$(NC)"
 	@make build-api
@@ -205,8 +189,6 @@ dev-frontend: ## Build and restart frontend only
 ##@ Go Commands
 
 go-build: ## Build Go binaries locally
-	@echo "$(GREEN)Building bifrost-agent...$(NC)"
-	cd agent && go build -o bifrost-agent .
 	@echo "$(GREEN)Building gateway-server...$(NC)"
 	cd gateway && go build -o gateway-server .
 	@echo "$(GREEN)Building api-server...$(NC)"
@@ -224,7 +206,6 @@ go-tidy: ## Run go mod tidy on all modules
 
 go-clean: ## Remove Go build artifacts
 	@echo "$(YELLOW)Cleaning Go artifacts...$(NC)"
-	rm -f agent/bifrost-agent agent/poc-agent agent/query-client
 	rm -f gateway/gateway-server
 	rm -f api-server/api-server
 	@echo "$(GREEN)✓ Go artifacts cleaned$(NC)"
@@ -251,22 +232,27 @@ info: ## Show system information
 
 ports: ## Show exposed ports
 	@echo "$(CYAN)Exposed Ports:$(NC)"
-	@echo "  Gateway:  8010 (gRPC)"
+	@echo "  Gateway:  8010 (gRPC), 8011 (HTTP)"
 	@echo "  API:      8080 (HTTP)"
 	@echo "  Frontend: 3000 (HTTP)"
 	@echo "  MySQL:    3306 (MySQL)"
+	@echo "  Postgres: 5432 (PostgreSQL)"
 
 urls: ## Show service URLs
 	@echo "$(CYAN)Service URLs:$(NC)"
-	@echo "  Frontend:    $(GREEN)http://localhost:3000$(NC)"
-	@echo "  API Server:  $(GREEN)http://localhost:8080$(NC)"
-	@echo "  Gateway:     $(GREEN)localhost:8010$(NC) (gRPC)"
-	@echo "  MySQL:       $(GREEN)localhost:3306$(NC)"
+	@echo "  Frontend:       $(GREEN)http://localhost:3000$(NC)"
+	@echo "  API Server:     $(GREEN)http://localhost:8080$(NC)"
+	@echo "  Gateway (gRPC): $(GREEN)localhost:8010$(NC)"
+	@echo "  Gateway (HTTP): $(GREEN)http://localhost:8011$(NC)"
+	@echo "  MySQL:          $(GREEN)localhost:3306$(NC)"
+	@echo "  Postgres:       $(GREEN)localhost:5432$(NC)"
 	@echo ""
 	@echo "$(CYAN)API Endpoints:$(NC)"
-	@echo "  Health:      $(GREEN)http://localhost:8080/health$(NC)"
-	@echo "  Query:       $(GREEN)http://localhost:8080/api/execute-query$(NC) (POST)"
-	@echo "  Agent Status:$(GREEN)http://localhost:8080/api/agent-status$(NC) (GET)"
+	@echo "  Health:         $(GREEN)http://localhost:8080/health$(NC)"
+	@echo "  Query:          $(GREEN)http://localhost:8080/api/execute-query$(NC) (POST)"
+	@echo "  Users:          $(GREEN)http://localhost:8080/api/users$(NC) (GET/POST)"
+	@echo "  Agents:         $(GREEN)http://localhost:8080/api/agents$(NC) (GET/POST)"
+	@echo "  Gateway Agents: $(GREEN)http://localhost:8011/agents$(NC) (GET)"
 
 ##@ Quick Start
 
@@ -290,7 +276,7 @@ quick-start: ## Quick start guide
 	@echo ""
 	@echo "$(YELLOW)4. View logs:$(NC)"
 	@echo "   make logs-gateway"
-	@echo "   make logs-agent"
+	@echo "   make logs-api"
 	@echo ""
 	@echo "$(YELLOW)5. Access services:$(NC)"
 	@echo "   Frontend: http://localhost:3000"

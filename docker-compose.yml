@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Gateway Server
   gateway:
@@ -17,23 +15,6 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
-    restart: unless-stopped
-
-  # Bifrost Agent
-  agent:
-    build:
-      context: .
-      dockerfile: agent/Dockerfile
-    container_name: bifrost-agent
-    environment:
-      - BIFROST_KEY=grpc://agent1:test-token-123@gateway:8010
-    depends_on:
-      gateway:
-        condition: service_healthy
-      mysql:
-        condition: service_healthy
-    networks:
-      - bifrost-network
     restart: unless-stopped
 
   # MySQL Database
