@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"strings"
 	"sync"
 
@@ -19,9 +21,10 @@ import (
 )
 
 const (
-	ListenAddr  = ":8010"
-	ValidToken  = "test-token-123"
-	MaxRecvSize = 1024 * 1024 * 17 // 17 MiB
+	ListenAddr     = ":8010"
+	HTTPListenAddr = ":8011"
+	ValidToken     = "test-token-123"
+	MaxRecvSize    = 1024 * 1024 * 17 // 17 MiB
 )
 
 type gatewayServer struct {
@@ -55,6 +58,7 @@ type Session struct {
 func main() {
 	log.Println("Starting Complete Hoop Gateway Server...")
 
+	// Start gRPC server
 	listener, err := net.Listen("tcp", ListenAddr)
 	if err != nil {
 		log.Fatalf("Failed to listen on %s: %v", ListenAddr, err)
@@ -70,11 +74,41 @@ func main() {
 	}
 	pb.RegisterTransportServer(grpcServer, gateway)
 
-	log.Printf("Gateway listening on %s", ListenAddr)
+	// Start HTTP server for agent status queries
+	go startHTTPServer(gateway.broker)
+
+	log.Printf("Gateway gRPC listening on %s", ListenAddr)
+	log.Printf("Gateway HTTP listening on %s", HTTPListenAddr)
 	log.Println("Ready to accept agent and client connections")
 
 	if err := grpcServer.Serve(listener); err != nil {
 		log.Fatalf("Failed to serve: %v", err)
+	}
+}
+
+// startHTTPServer starts an HTTP server for querying gateway state
+func startHTTPServer(broker *Broker) {
+	mux := http.NewServeMux()
+
+	// Endpoint to list active agents
+	mux.HandleFunc("/agents", func(w http.ResponseWriter, r *http.Request) {
+		agents := broker.GetActiveAgents()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"agents": agents,
+			"count":  len(agents),
+		})
+	})
+
+	// Health check
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	})
+
+	log.Printf("Starting HTTP server on %s", HTTPListenAddr)
+	if err := http.ListenAndServe(HTTPListenAddr, mux); err != nil {
+		log.Fatalf("HTTP server failed: %v", err)
 	}
 }
 
@@ -282,6 +316,18 @@ func (b *Broker) GetSession(sessionID string) *Session {
 		return val.(*Session)
 	}
 	return nil
+}
+
+// GetActiveAgents returns a list of all currently connected agents
+func (b *Broker) GetActiveAgents() []string {
+	agents := []string{}
+	b.agents.Range(func(key, value interface{}) bool {
+		if agentID, ok := key.(string); ok {
+			agents = append(agents, agentID)
+		}
+		return true
+	})
+	return agents
 }
 
 // HealthCheck endpoint

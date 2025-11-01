@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Play, Database, AlertCircle, CheckCircle2, Loader2, Copy, Trash2, Users, Plus, Edit, X } from 'lucide-react'
+import { Play, Database, AlertCircle, CheckCircle2, Loader2, Copy, Trash2, Users, Plus, Edit, X, Activity, Circle } from 'lucide-react'
 import { cn } from './lib/utils'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
@@ -22,6 +22,15 @@ function App() {
   const [userError, setUserError] = useState(null)
   const [userSuccess, setUserSuccess] = useState(null)
 
+  // Agent Management State
+  const [agents, setAgents] = useState([])
+  const [loadingAgents, setLoadingAgents] = useState(false)
+  const [showAgentModal, setShowAgentModal] = useState(false)
+  const [editingAgent, setEditingAgent] = useState(null)
+  const [agentForm, setAgentForm] = useState({ agent_id: '', name: '', description: '' })
+  const [agentError, setAgentError] = useState(null)
+  const [agentSuccess, setAgentSuccess] = useState(null)
+
   useEffect(() => {
     checkAgentStatus()
     const interval = setInterval(checkAgentStatus, 10000)
@@ -31,6 +40,8 @@ function App() {
   useEffect(() => {
     if (activeTab === 'users') {
       fetchUsers()
+    } else if (activeTab === 'agents') {
+      fetchAgents()
     }
   }, [activeTab])
 
@@ -196,6 +207,99 @@ function App() {
     }
   }
 
+  // Agent Management Functions
+  const fetchAgents = async () => {
+    setLoadingAgents(true)
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/agents`)
+      const data = await response.json()
+      setAgents(data || [])
+    } catch (err) {
+      setAgentError('Failed to fetch agents')
+    } finally {
+      setLoadingAgents(false)
+    }
+  }
+
+  const openAgentModal = (agent = null) => {
+    if (agent) {
+      setEditingAgent(agent)
+      setAgentForm({ agent_id: agent.agent_id, name: agent.name, description: agent.description })
+    } else {
+      setEditingAgent(null)
+      setAgentForm({ agent_id: '', name: '', description: '' })
+    }
+    setShowAgentModal(true)
+    setAgentError(null)
+  }
+
+  const closeAgentModal = () => {
+    setShowAgentModal(false)
+    setEditingAgent(null)
+    setAgentForm({ agent_id: '', name: '', description: '' })
+    setAgentError(null)
+  }
+
+  const handleAgentSubmit = async (e) => {
+    e.preventDefault()
+    setAgentError(null)
+
+    if (!agentForm.agent_id || !agentForm.name) {
+      setAgentError('Agent ID and name are required')
+      return
+    }
+
+    try {
+      const url = editingAgent
+        ? `${API_BASE_URL}/api/agents/${editingAgent.id}`
+        : `${API_BASE_URL}/api/agents`
+
+      const method = editingAgent ? 'PUT' : 'POST'
+
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(agentForm),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        setAgentError(data.error || 'Failed to save agent')
+        return
+      }
+
+      setAgentSuccess(editingAgent ? 'Agent updated successfully' : 'Agent created successfully')
+      setTimeout(() => setAgentSuccess(null), 3000)
+      closeAgentModal()
+      fetchAgents()
+    } catch (err) {
+      setAgentError('Failed to save agent: ' + err.message)
+    }
+  }
+
+  const handleDeleteAgent = async (agentId) => {
+    if (!confirm('Are you sure you want to delete this agent?')) return
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/agents/${agentId}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const data = await response.json()
+        setAgentError(data.error || 'Failed to delete agent')
+        return
+      }
+
+      setAgentSuccess('Agent deleted successfully')
+      setTimeout(() => setAgentSuccess(null), 3000)
+      fetchAgents()
+    } catch (err) {
+      setAgentError('Failed to delete agent: ' + err.message)
+    }
+  }
+
   const { headers, rows } = results ? parseResults(results.results) : { headers: [], rows: [] }
 
   return (
@@ -252,6 +356,20 @@ function App() {
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4" />
                 User Management
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('agents')}
+              className={cn(
+                "px-4 py-2 font-medium text-sm transition-colors border-b-2",
+                activeTab === 'agents'
+                  ? "border-black text-black"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4" />
+                Agent Management
               </div>
             </button>
           </div>
@@ -503,6 +621,117 @@ function App() {
             )}
           </>
         )}
+
+        {/* Agent Management Tab */}
+        {activeTab === 'agents' && (
+          <>
+            <div className="mb-6 flex items-center justify-between">
+              <h2 className="text-2xl font-bold">Agent Management</h2>
+              <button
+                onClick={() => openAgentModal()}
+                className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Register Agent
+              </button>
+            </div>
+
+            {agentSuccess && (
+              <div className="mb-4 p-3 border border-black rounded-md bg-black text-white text-sm">
+                ✓ {agentSuccess}
+              </div>
+            )}
+
+            {agentError && (
+              <div className="mb-4 p-4 border border-black rounded-lg bg-white">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-gray-700">{agentError}</p>
+                </div>
+              </div>
+            )}
+
+            {loadingAgents ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin" />
+              </div>
+            ) : agents.length === 0 ? (
+              <div className="border border-dashed border-gray-300 rounded-lg p-12 text-center">
+                <Activity className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                <h3 className="text-lg font-semibold mb-2">No agents registered</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Register your first agent to start managing database connections
+                </p>
+                <button
+                  onClick={() => openAgentModal()}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Register Agent
+                </button>
+              </div>
+            ) : (
+              <div className="border border-black rounded-lg overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-black text-white">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">ID</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Agent ID</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Description</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Status</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">Created</th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {agents.map((agent) => (
+                      <tr key={agent.id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-3 text-sm font-mono">{agent.id}</td>
+                        <td className="px-4 py-3 text-sm font-mono">{agent.agent_id}</td>
+                        <td className="px-4 py-3 text-sm font-medium">{agent.name}</td>
+                        <td className="px-4 py-3 text-sm text-gray-600">{agent.description || '-'}</td>
+                        <td className="px-4 py-3 text-sm">
+                          <div className="flex items-center gap-2">
+                            <Circle className={cn(
+                              "w-2 h-2 fill-current",
+                              agent.status === 'connected' ? "text-green-500" : "text-gray-400"
+                            )} />
+                            <span className={cn(
+                              "font-medium",
+                              agent.status === 'connected' ? "text-green-600" : "text-gray-500"
+                            )}>
+                              {agent.status === 'connected' ? 'Connected' : 'Disconnected'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500">
+                          {new Date(agent.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-right">
+                          <button
+                            onClick={() => openAgentModal(agent)}
+                            className="inline-flex items-center gap-1 px-3 py-1 text-sm border border-black rounded hover:bg-black hover:text-white transition-colors mr-2"
+                          >
+                            <Edit className="w-3 h-3" />
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteAgent(agent.id)}
+                            className="inline-flex items-center gap-1 px-3 py-1 text-sm border border-black rounded hover:bg-red-600 hover:border-red-600 hover:text-white transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
       </main>
 
       {/* User Modal */}
@@ -574,6 +803,86 @@ function App() {
                 <button
                   type="button"
                   onClick={closeUserModal}
+                  className="flex-1 px-4 py-2 border border-black rounded-md hover:bg-gray-100 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Agent Modal */}
+      {showAgentModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white border border-black rounded-lg max-w-md w-full">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-black">
+              <h3 className="text-lg font-bold">
+                {editingAgent ? 'Edit Agent' : 'Register New Agent'}
+              </h3>
+              <button
+                onClick={closeAgentModal}
+                className="p-1 hover:bg-gray-100 rounded transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAgentSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Agent ID</label>
+                <input
+                  type="text"
+                  value={agentForm.agent_id}
+                  onChange={(e) => setAgentForm({ ...agentForm, agent_id: e.target.value })}
+                  className="w-full px-3 py-2 border border-black rounded-md focus:outline-none focus:ring-2 focus:ring-black"
+                  placeholder="agent-agent1"
+                  required
+                  disabled={editingAgent}
+                />
+                <p className="mt-1 text-xs text-gray-500">Unique identifier for the agent</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Name</label>
+                <input
+                  type="text"
+                  value={agentForm.name}
+                  onChange={(e) => setAgentForm({ ...agentForm, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-black rounded-md focus:outline-none focus:ring-2 focus:ring-black"
+                  placeholder="Primary Agent"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Description</label>
+                <textarea
+                  value={agentForm.description}
+                  onChange={(e) => setAgentForm({ ...agentForm, description: e.target.value })}
+                  className="w-full px-3 py-2 border border-black rounded-md focus:outline-none focus:ring-2 focus:ring-black"
+                  placeholder="Main database agent for MySQL operations"
+                  rows={3}
+                />
+              </div>
+
+              {agentError && (
+                <div className="p-3 border border-red-500 rounded-md bg-red-50 text-red-700 text-sm">
+                  {agentError}
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 transition-colors"
+                >
+                  {editingAgent ? 'Update Agent' : 'Register Agent'}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeAgentModal}
                   className="flex-1 px-4 py-2 border border-black rounded-md hover:bg-gray-100 transition-colors"
                 >
                   Cancel

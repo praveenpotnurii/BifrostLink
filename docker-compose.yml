@@ -8,7 +8,8 @@ services:
       dockerfile: gateway/Dockerfile
     container_name: bifrost-gateway
     ports:
-      - "8010:8010"
+      - "8010:8010"  # gRPC port
+      - "8011:8011"  # HTTP port for agent status
     networks:
       - bifrost-network
     healthcheck:
@@ -98,6 +99,7 @@ services:
       - bifrost-network
     environment:
       - GATEWAY_ADDR=gateway:8010
+      - GATEWAY_HTTP_ADDR=gateway:8011
       - POSTGRES_HOST=postgres
       - POSTGRES_PORT=5432
       - POSTGRES_USER=bifrost_admin

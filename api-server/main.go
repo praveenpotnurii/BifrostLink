@@ -277,6 +277,30 @@ func main() {
 		}
 	})
 
+	// Agent management endpoints
+	mux.HandleFunc("/api/agents", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handleGetAgents(w, r)
+		case http.MethodPost:
+			handleCreateAgent(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/agents/", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			handleGetAgent(w, r)
+		case http.MethodPut:
+			handleUpdateAgent(w, r)
+		case http.MethodDelete:
+			handleDeleteAgent(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	// Health check
 	mux.HandleFunc("/health", handleHealth)
 
@@ -298,6 +322,12 @@ func main() {
 	log.Println("   - GET    /api/users/:id")
 	log.Println("   - PUT    /api/users/:id")
 	log.Println("   - DELETE /api/users/:id")
+	log.Println("   Agent Management:")
+	log.Println("   - GET    /api/agents")
+	log.Println("   - POST   /api/agents")
+	log.Println("   - GET    /api/agents/:id")
+	log.Println("   - PUT    /api/agents/:id")
+	log.Println("   - DELETE /api/agents/:id")
 	log.Println("   Health:")
 	log.Println("   - GET    /health")
 	log.Fatal(http.ListenAndServe(":8080", handler))
