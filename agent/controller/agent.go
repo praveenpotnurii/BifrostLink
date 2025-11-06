@@ -16,7 +16,6 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/bifrost/poc/config"
 	"github.com/bifrost/poc/controller/system/dbprovisioner"
-	"github.com/bifrost/poc/controller/system/runbookhook"
 	"github.com/bifrost/poc/secretsmanager"
 	term "github.com/bifrost/poc/terminal"
 	"github.com/bifrost/common/log"
@@ -162,9 +161,6 @@ func (a *Agent) Run() error {
 		// system
 		case pbsystem.ProvisionDBRolesRequest:
 			dbprovisioner.ProcessDBProvisionerRequest(a.client, pkt)
-
-		case pbsystem.RunbookHookRequestType:
-			runbookhook.ProcessRequest(a.client, pkt)
 		}
 	}
 }

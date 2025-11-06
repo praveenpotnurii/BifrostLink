@@ -56,7 +56,6 @@ const (
 	ConnectionOriginClient             = "client"
 	ConnectionOriginClientProxyManager = "client-proxymanager"
 	ConnectionOriginClientAPI          = "client-api"
-	ConnectionOriginClientAPIRunbooks  = "client-api-runbooks"
 
 	SystemAgentEnvs = "system.agent.envs"
 

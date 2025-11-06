@@ -1,15 +1,9 @@
 package dbprovisioner
 
 import (
-	"bytes"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
-	"github.com/bifrost/poc/libbifrost"
-	"sync"
-	"time"
 
 	"github.com/bifrost/poc/secretsmanager"
 	"github.com/bifrost/common/log"
@@ -17,8 +11,6 @@ import (
 	pb "github.com/bifrost/common/proto"
 	pbsystem "github.com/bifrost/common/proto/system"
 )
-
-const maxOutputBytes int = 4096
 
 var memoryStore = memory.New()
 
@@ -50,8 +42,8 @@ func processDBProvisionerRequest(client pb.ClientTransport, pkt *pb.Packet) {
 		return
 	}
 
-	log.With("sid", sid).Infof("received provisoning request, type=%v, address=%v, masteruser=%v, vault-provider=%v, runbook-hook=%v",
-		req.DatabaseType, req.Address(), req.MasterUsername, hasVaultProvider, req.ExecHook != nil)
+	log.With("sid", sid).Infof("received provisoning request, type=%v, address=%v, masteruser=%v, vault-provider=%v",
+		req.DatabaseType, req.Address(), req.MasterUsername, hasVaultProvider)
 
 	var res *pbsystem.DBProvisionerResponse
 	switch req.DatabaseType {
@@ -107,62 +99,6 @@ func processDBProvisionerRequest(client pb.ClientTransport, pkt *pb.Packet) {
 		}
 	}
 
-	if req.ExecHook != nil {
-		startedExecutionAt := time.Now().UTC()
-		stdout, stdoutw := io.Pipe()
-		stderr, stderrw := io.Pipe()
-		provisionerResponseJSON, _ := json.Marshal(res)
-		provisionerRequestJSON, _ := json.Marshal(req)
-		cmd, err := libbifrost.NewAdHocExec(
-			map[string]any{
-				"envvar:HOOP_AWS_CONNECT_REQUEST":  base64.StdEncoding.EncodeToString(provisionerRequestJSON),
-				"envvar:HOOP_AWS_CONNECT_RESPONSE": base64.StdEncoding.EncodeToString(provisionerResponseJSON),
-			},
-			req.ExecHook.Command,
-			[]byte(req.ExecHook.InputFile),
-			stdoutw,
-			stderrw,
-			nil)
-		if err != nil {
-			sendResponse(client, pbsystem.NewError(sid, "failed executing runbook hook, reason=%v", err))
-			return
-		}
-
-		log.With("sid", sid).Infof("starting executing exec runbook, command=%v, filelength=%v",
-			req.ExecHook.Command, len(req.ExecHook.InputFile))
-		output := &outputSafeWriter{buf: bytes.NewBufferString("")}
-
-		// CAUTION: stdout and stderr streams are not merged based on their actual arrival time.
-		// Due to limitations in the underlying terminal package, the output may display stderr
-		// content out of sequence relative to stdout. This can make debugging difficult as
-		// error messages might appear before or after their triggering output rather than
-		// precisely when they occurred during execution.
-		stdoutCh := copyBuffer(output, stdout, 4096, "stdout-reader")
-		stderrCh := copyBuffer(output, stderr, 4096, "stderr-reader")
-		cmd.Run(func(exitCode int, errMsg string) {
-			log.With("sid", sid).Infof("finish executing runbook hook on callback, exit_code=%v, output-length=%v, err=%v",
-				exitCode, output.Len(), errMsg)
-			_ = stdoutw.Close()
-			_ = stderrw.Close()
-
-			// truncate at 4096 bytes
-			outputContent := output.String()
-			if len(outputContent) > maxOutputBytes {
-				remainingBytes := len(outputContent[maxOutputBytes:])
-				outputContent = outputContent[:maxOutputBytes]
-				outputContent += fmt.Sprintf(" [truncated %v byte(s)]", remainingBytes)
-			}
-			res.RunbookHook = &pbsystem.RunbookHook{
-				ExitCode:         exitCode,
-				Output:           outputContent,
-				ExecutionTimeSec: int(time.Since(startedExecutionAt).Seconds()),
-			}
-		})
-		<-stdoutCh
-		<-stderrCh
-
-	}
-
 	sendResponse(client, res)
 }
 
@@ -200,27 +136,3 @@ func generateRandomPassword() (string, error) {
 
 	return string(password), nil
 }
-
-func copyBuffer(dst io.Writer, src io.Reader, bufSize int, stream string) chan struct{} {
-	doneCh := make(chan struct{})
-	go func() {
-		wb, err := io.CopyBuffer(dst, src, make([]byte, bufSize))
-		log.Infof("[%s] - done copying runbook stream, written=%v, err=%v", stream, wb, err)
-		close(doneCh)
-	}()
-	return doneCh
-}
-
-type outputSafeWriter struct {
-	buf *bytes.Buffer
-	mu  sync.Mutex
-}
-
-func (w *outputSafeWriter) Write(data []byte) (n int, err error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.buf.Write(data)
-}
-
-func (w *outputSafeWriter) String() string { return w.buf.String() }
-func (w *outputSafeWriter) Len() int       { return w.buf.Len() }
