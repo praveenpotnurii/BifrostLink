@@ -19,8 +19,3 @@ type DBCore interface {
 	MSSQL() (Proxy, error)
 	MongoDB() (Proxy, error)
 }
-
-type License interface {
-	Type() string
-	Verify() error
-}
