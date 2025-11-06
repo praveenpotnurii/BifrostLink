@@ -381,10 +381,6 @@ For production deployment, consider:
    - Health checks and auto-restart
    - Backup and disaster recovery
 
-## 📄 License
-
-This is a proof-of-concept project for demonstration purposes.
-
 ## 🤝 Contributing
 
 This is a POC project demonstrating the Bifrost agent architecture.
