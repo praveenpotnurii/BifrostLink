@@ -134,15 +134,12 @@ func provisionMSSQLRole(db *sql.DB, r pbsystem.DBProvisionerRequest, roleName ro
 		Message:        "",
 		CompletedAt:    time.Now().UTC(),
 		Credentials: &pbsystem.DBCredentials{
-			SecretsManagerProvider: pbsystem.SecretsManagerProviderDatabase,
-			SecretID:               "",
-			SecretKeys:             []string{},
-			Host:                   r.DatabaseHostname,
-			Port:                   r.Port(),
-			User:                   userRole,
-			Password:               randomPasswd,
-			DefaultDatabase:        "master",
-			Options:                map[string]string{},
+			Host:            r.DatabaseHostname,
+			Port:            r.Port(),
+			User:            userRole,
+			Password:        randomPasswd,
+			DefaultDatabase: "master",
+			Options:         map[string]string{},
 		},
 	}
 }

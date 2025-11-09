@@ -16,7 +16,6 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/bifrost/poc/config"
 	"github.com/bifrost/poc/controller/system/dbprovisioner"
-	"github.com/bifrost/poc/secretsmanager"
 	term "github.com/bifrost/poc/terminal"
 	"github.com/bifrost/common/log"
 	"github.com/bifrost/common/memory"
@@ -429,21 +428,7 @@ func (a *Agent) decodeConnectionParams(sessionID []byte, pkt *pb.Packet) *pb.Age
 		})
 		return nil
 	}
-	envVars, err := secretsmanager.Decode(connParams.EnvVars)
-	if err != nil {
-		errMsg := fmt.Sprintf("failed decoding environment variables %v", err)
-		log.With("sid", string(sessionID)).Warn(errMsg)
-		_ = a.client.Send(&pb.Packet{
-			Type:    pbclient.SessionClose,
-			Payload: []byte(errMsg),
-			Spec: map[string][]byte{
-				pb.SpecClientExitCodeKey: []byte(internalExitCode),
-				pb.SpecGatewaySessionID:  sessionID,
-			},
-		})
-		return nil
-	}
-	connParams.EnvVars = envVars
+	// EnvVars are sent directly from gateway, no need for secrets manager decoding
 	if clientEnvVarsEnc := pkt.Spec[pb.SpecClientExecEnvVar]; len(clientEnvVarsEnc) > 0 {
 		var clientEnvVars map[string]string
 		if err := pb.GobDecodeInto(clientEnvVarsEnc, &clientEnvVars); err != nil {

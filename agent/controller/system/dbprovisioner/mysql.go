@@ -90,15 +90,12 @@ func provisionMySQLRole(db *sql.DB, r pbsystem.DBProvisionerRequest, roleName ro
 		Message:        "",
 		CompletedAt:    time.Now().UTC(),
 		Credentials: &pbsystem.DBCredentials{
-			SecretsManagerProvider: pbsystem.SecretsManagerProviderDatabase,
-			SecretID:               "",
-			SecretKeys:             []string{},
-			Host:                   r.DatabaseHostname,
-			Port:                   r.Port(),
-			User:                   userRole,
-			Password:               randomPasswd,
-			DefaultDatabase:        "mysql",
-			Options:                map[string]string{},
+			Host:            r.DatabaseHostname,
+			Port:            r.Port(),
+			User:            userRole,
+			Password:        randomPasswd,
+			DefaultDatabase: "mysql",
+			Options:         map[string]string{},
 		},
 	}
 }

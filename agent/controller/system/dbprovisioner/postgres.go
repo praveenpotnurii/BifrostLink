@@ -143,15 +143,12 @@ func provisionPostgresRole(r pbsystem.DBProvisionerRequest, dbNames []string, ro
 		Message:        "",
 		CompletedAt:    time.Now().UTC(),
 		Credentials: &pbsystem.DBCredentials{
-			SecretsManagerProvider: pbsystem.SecretsManagerProviderDatabase,
-			SecretID:               "",
-			SecretKeys:             []string{},
-			Host:                   r.DatabaseHostname,
-			Port:                   r.Port(),
-			User:                   userRole,
-			Password:               randomPasswd,
-			DefaultDatabase:        "postgres",
-			Options:                map[string]string{},
+			Host:            r.DatabaseHostname,
+			Port:            r.Port(),
+			User:            userRole,
+			Password:        randomPasswd,
+			DefaultDatabase: "postgres",
+			Options:         map[string]string{},
 		},
 	}
 }

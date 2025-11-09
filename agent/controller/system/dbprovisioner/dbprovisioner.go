@@ -3,9 +3,7 @@ package dbprovisioner
 import (
 	"crypto/rand"
 	"encoding/json"
-	"fmt"
 
-	"github.com/bifrost/poc/secretsmanager"
 	"github.com/bifrost/common/log"
 	"github.com/bifrost/common/memory"
 	pb "github.com/bifrost/common/proto"
@@ -35,15 +33,8 @@ func processDBProvisionerRequest(client pb.ClientTransport, pkt *pb.Packet) {
 	memoryStore.Set(lockResourceID, nil)
 	defer memoryStore.Del(lockResourceID)
 
-	vault, err := secretsmanager.NewVaultProvider()
-	hasVaultProvider := req.Vault != nil
-	if hasVaultProvider && err != nil {
-		sendResponse(client, pbsystem.NewError(sid, err.Error()))
-		return
-	}
-
-	log.With("sid", sid).Infof("received provisoning request, type=%v, address=%v, masteruser=%v, vault-provider=%v",
-		req.DatabaseType, req.Address(), req.MasterUsername, hasVaultProvider)
+	log.With("sid", sid).Infof("received provisoning request, type=%v, address=%v, masteruser=%v",
+		req.DatabaseType, req.Address(), req.MasterUsername)
 
 	var res *pbsystem.DBProvisionerResponse
 	switch req.DatabaseType {
@@ -70,32 +61,6 @@ func processDBProvisionerRequest(client pb.ClientTransport, pkt *pb.Packet) {
 			res.Message = pbsystem.MessageOneOrMoreRolesFailed
 			res.Status = pbsystem.StatusFailedType
 			break
-		}
-	}
-
-	if hasVaultProvider && res.Status == pbsystem.StatusCompletedType {
-		for _, item := range res.Result {
-			item.Credentials.SecretsManagerProvider = pbsystem.SecretsManagerProviderVault
-			item.Credentials.SecretKeys = []string{"HOST", "PORT", "USER", "PASSWORD", "DB"}
-
-			// e.g.: dbsecrets/data/hoop_ro_127.0.0.1
-			vaultPath := fmt.Sprintf("%s%s_%s", req.Vault.SecretID, item.Credentials.User, item.Credentials.Host)
-			item.Credentials.SecretID = vaultPath
-			err := vault.SetValue(vaultPath, map[string]string{
-				"HOST":     item.Credentials.Host,
-				"PORT":     item.Credentials.Port,
-				"USER":     item.Credentials.User,
-				"PASSWORD": item.Credentials.Password,
-				"DB":       item.Credentials.DefaultDatabase,
-			})
-
-			// avoid password from being sent by the network when Vault is set
-			item.Credentials.Password = ""
-			if err != nil {
-				item.Message = fmt.Sprintf("Unable to create or update secret in Vault, reason=%v", err)
-				res.Message = pbsystem.MessageVaultSaveError
-				res.Status = pbsystem.StatusFailedType
-			}
 		}
 	}
 

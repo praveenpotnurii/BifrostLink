@@ -16,12 +16,7 @@ const (
 
 	MessageCompleted            string = "All user roles have been successfully provisioned"
 	MessageOneOrMoreRolesFailed string = "One or more user roles failed to be provisioned"
-	MessageVaultSaveError       string = "One or more user roles could not be saved to the Vault key-value store"
 )
-
-type VaultProvider struct {
-	SecretID string `json:"secret_id"`
-}
 
 type DBProvisionerRequest struct {
 	OrgID            string           `json:"org_id"`
@@ -33,27 +28,15 @@ type DBProvisionerRequest struct {
 	MasterPassword   string           `json:"master_password"`
 	DatabaseType     string           `json:"database_type"`
 	DatabaseTags     []map[string]any `json:"database_tags"`
-
-	Vault *VaultProvider `json:"vault_provider"`
 }
 
-type SecretsManagerProviderType string
-
-const (
-	SecretsManagerProviderDatabase SecretsManagerProviderType = "database"
-	SecretsManagerProviderVault    SecretsManagerProviderType = "vault"
-)
-
 type DBCredentials struct {
-	Host                   string                     `json:"host"`
-	Port                   string                     `json:"port"`
-	User                   string                     `json:"user"`
-	Password               string                     `json:"password"`
-	DefaultDatabase        string                     `json:"default_database"`
-	Options                map[string]string          `json:"options"`
-	SecretsManagerProvider SecretsManagerProviderType `json:"secrets_manager_provider"`
-	SecretID               string                     `json:"secret_id"`
-	SecretKeys             []string                   `json:"secret_keys"`
+	Host            string            `json:"host"`
+	Port            string            `json:"port"`
+	User            string            `json:"user"`
+	Password        string            `json:"password"`
+	DefaultDatabase string            `json:"default_database"`
+	Options         map[string]string `json:"options"`
 }
 
 type Result struct {
