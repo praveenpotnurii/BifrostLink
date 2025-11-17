@@ -29,12 +29,13 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} go build -ldflags="-w -
 FROM debian:bookworm-slim
 
 ARG TARGETARCH
-# Install required runtime tools including mysql-client and mongosh for POC demo
+# Install required runtime tools including mysql-client, postgresql-client, and mongosh for POC demo
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     bash \
     curl \
     default-mysql-client \
+    postgresql-client \
     && rm -rf /var/lib/apt/lists/* && \
     # Download and install mongosh (MongoDB Shell) pre-built binary
     if [ "$TARGETARCH" = "arm64" ]; then \

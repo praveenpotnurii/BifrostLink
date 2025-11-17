@@ -1,11 +1,8 @@
 package controller
 
 import (
-	"context"
 	"fmt"
 	"io"
-	"github.com/bifrost/poc/libbifrost"
-	"strings"
 
 	"github.com/bifrost/common/log"
 	pb "github.com/bifrost/common/proto"
@@ -23,19 +20,18 @@ func (a *Agent) processPGProtocol(pkt *pb.Packet) {
 	}
 
 	clientConnectionID := string(pkt.Spec[pb.SpecClientConnectionID])
-	if clientConnectionID == "" {
-		log.Println("connection id not found in memory")
+	if clientConnectionID == "" && pkt.Payload != nil {
+		log.Errorf("connection id not found in memory")
 		a.sendClientSessionClose(sessionID, "connection id not found, contact the administrator")
 		return
 	}
-
 	clientConnectionIDKey := fmt.Sprintf("%s:%s", sessionID, string(clientConnectionID))
 	clientObj := a.connStore.Get(clientConnectionIDKey)
-	if serverWriter, ok := clientObj.(io.WriteCloser); ok {
-		if _, err := serverWriter.Write(pkt.Payload); err != nil {
+	if proxyServerWriter, ok := clientObj.(io.WriteCloser); ok {
+		if _, err := proxyServerWriter.Write(pkt.Payload); err != nil {
 			log.Errorf("failed sending packet, err=%v", err)
 			a.sendClientSessionClose(sessionID, "fail to write packet")
-			_ = serverWriter.Close()
+			_ = proxyServerWriter.Close()
 		}
 		return
 	}
@@ -49,43 +45,28 @@ func (a *Agent) processPGProtocol(pkt *pb.Packet) {
 
 	log.Infof("session=%v - starting postgres connection at %v:%v", sessionID, connenv.host, connenv.port)
 
-	var dataMaskingEntityTypesData string
-	if connParams.DataMaskingEntityTypesData != nil {
-		dataMaskingEntityTypesData = string(connParams.DataMaskingEntityTypesData)
-	}
-	var guardRailRules string
-	if connParams.GuardRailRules != nil {
-		guardRailRules = string(connParams.GuardRailRules)
+	// POC: Execute PostgreSQL query directly using psql CLI (libbifrost is stub in POC)
+	// In production, this would use libbifrost's PostgreSQL protocol handler
+	query := string(pkt.Payload)
+	log.Infof("session=%v - executing query: %s", sessionID, query)
+
+	// Execute psql command with connection parameters
+	// Use PGPASSWORD environment variable to avoid password prompt
+	// -t: tuples only (no headers/footers), -A: unaligned output, -F: field separator (tab)
+	psqlCmd := fmt.Sprintf("PGPASSWORD=%s psql -h %s -p %s -U %s -d %s -t -A -F $'\\t' -c \"%s\" 2>&1",
+		connenv.pass, connenv.host, connenv.port, connenv.user, connenv.dbname, query)
+
+	output, exitCode := a.executePostgresCommand(psqlCmd)
+
+	// Send output back to client
+	if len(output) > 0 {
+		_, _ = streamClient.Write(output)
 	}
 
-	opts := map[string]string{
-		"sid":                       sessionID,
-		"hostname":                  connenv.host,
-		"port":                      connenv.port,
-		"username":                  connenv.user,
-		"password":                  connenv.pass,
-		"sslmode":                   connenv.postgresSSLMode,
-		"dlp_provider":              connParams.DlpProvider,
-		"dlp_mode":                  connParams.DlpMode,
-		"mspresidio_analyzer_url":   connParams.DlpPresidioAnalyzerURL,
-		"mspresidio_anonymizer_url": connParams.DlpPresidioAnonymizerURL,
-		"dlp_gcp_credentials":       connParams.DlpGcpRawCredentialsJSON,
-		"dlp_info_types":            strings.Join(connParams.DLPInfoTypes, ","),
-		"dlp_masking_character":     "#",
-		"data_masking_entity_data":  dataMaskingEntityTypesData,
-		"guard_rail_rules":          guardRailRules,
+	// Close the session with exit code
+	if exitCode == 0 {
+		a.sendClientSessionCloseWithExitCode(sessionID, "", "0")
+	} else {
+		a.sendClientSessionCloseWithExitCode(sessionID, "query execution failed", fmt.Sprintf("%d", exitCode))
 	}
-	serverWriter, err := libbifrost.NewDBCore(context.Background(), streamClient, opts).Postgres()
-	if err != nil {
-		errMsg := fmt.Sprintf("failed connecting with postgres server, err=%v", err)
-		log.Errorf(errMsg)
-		a.sendClientSessionClose(sessionID, errMsg)
-		return
-	}
-	serverWriter.Run(func(_ int, errMsg string) {
-		a.sendClientSessionClose(sessionID, errMsg)
-	})
-	// write the first packet when establishing the connection
-	_, _ = serverWriter.Write(pkt.Payload)
-	a.connStore.Set(clientConnectionIDKey, serverWriter)
 }
