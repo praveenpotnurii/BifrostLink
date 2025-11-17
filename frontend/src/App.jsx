@@ -37,6 +37,7 @@ function App() {
   const [agentError, setAgentError] = useState(null)
   const [agentSuccess, setAgentSuccess] = useState(null)
   const [dockerCmdCopied, setDockerCmdCopied] = useState(false)
+  const [gatewayIP, setGatewayIP] = useState('YOUR_GATEWAY_IP')
 
   // Database Management State
   const [databases, setDatabases] = useState([])
@@ -411,30 +412,15 @@ function App() {
     setTimeout(() => setDockerCmdCopied(false), 2000)
   }
 
-  const generateDockerCommands = (agentIdSuffix) => {
-    if (!agentIdSuffix) return {}
+  const generateDockerCommand = (agentIdSuffix, gatewayIP) => {
+    if (!agentIdSuffix) return ''
     const token = 'test-token-123'
-    // User only provides the suffix, so we use it directly in BIFROST_KEY
-    // Gateway will add "agent-" prefix, resulting in "agent-{suffix}"
     const fullAgentId = `agent-${agentIdSuffix}`
 
-    return {
-      sameNetwork: `docker run -d \\
+    return `docker run -d \\
   --name ${fullAgentId} \\
-  -e BIFROST_KEY=grpc://${agentIdSuffix}:${token}@gateway:8010 \\
-  --network bifrostlink_default \\
-  bifrostlink-agent`,
-
-      sameHost: `docker run -d \\
-  --name ${fullAgentId} \\
-  -e BIFROST_KEY=grpc://${agentIdSuffix}:${token}@host.docker.internal:8010 \\
-  bifrostlink-agent`,
-
-      differentHost: `docker run -d \\
-  --name ${fullAgentId} \\
-  -e BIFROST_KEY=grpc://${agentIdSuffix}:${token}@YOUR_GATEWAY_IP:8010 \\
-  bifrostlink-agent`
-    }
+  -e BIFROST_KEY=grpc://${agentIdSuffix}:${token}@${gatewayIP}:8010 \\
+  praveenpotnurii/bifrostlink-agent:latest`
   }
 
   // Database Management Functions
@@ -1236,68 +1222,50 @@ function App() {
 
               {/* Docker Command Section */}
               {!editingAgent && agentForm.agent_id && (
-                <div className="border border-gray-300 rounded-lg p-4 bg-gray-50 space-y-4">
-                  <label className="block text-sm font-medium">Docker Run Commands</label>
+                <div className="border border-gray-300 rounded-lg p-4 bg-gray-50 space-y-3">
+                  <label className="block text-sm font-medium">Deploy Agent</label>
 
-                  {/* Same Docker Network */}
+                  {/* Gateway IP Input */}
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-xs font-medium text-gray-700">1. Same Docker Network</p>
-                      <button
-                        type="button"
-                        onClick={() => copyDockerCommand(generateDockerCommands(agentForm.agent_id).sameNetwork)}
-                        className="flex items-center gap-1 px-2 py-1 text-xs border border-black rounded hover:bg-black hover:text-white transition-colors"
-                      >
-                        <Copy className="w-3 h-3" />
-                        Copy
-                      </button>
-                    </div>
-                    <pre className="text-xs font-mono bg-white border border-gray-300 rounded p-2 overflow-x-auto whitespace-pre">
-                      {generateDockerCommands(agentForm.agent_id).sameNetwork}
-                    </pre>
-                    <p className="mt-1 text-xs text-gray-500">Use when agent runs on the same Docker network as gateway</p>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Gateway IP Address</label>
+                    <input
+                      type="text"
+                      value={gatewayIP}
+                      onChange={(e) => setGatewayIP(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-black text-sm"
+                      placeholder="192.168.1.100 or gateway.example.com"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Enter your gateway's IP address or hostname. Use <code className="bg-white px-1 py-0.5 rounded">host.docker.internal</code> for Mac/Windows
+                    </p>
                   </div>
 
-                  {/* Same Host, Different Network */}
+                  {/* Docker Command */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <p className="text-xs font-medium text-gray-700">2. Same Host (Docker to Host)</p>
+                      <p className="text-xs font-medium text-gray-700">Docker Run Command</p>
                       <button
                         type="button"
-                        onClick={() => copyDockerCommand(generateDockerCommands(agentForm.agent_id).sameHost)}
+                        onClick={() => copyDockerCommand(generateDockerCommand(agentForm.agent_id, gatewayIP))}
                         className="flex items-center gap-1 px-2 py-1 text-xs border border-black rounded hover:bg-black hover:text-white transition-colors"
                       >
                         <Copy className="w-3 h-3" />
                         Copy
                       </button>
                     </div>
-                    <pre className="text-xs font-mono bg-white border border-gray-300 rounded p-2 overflow-x-auto whitespace-pre">
-                      {generateDockerCommands(agentForm.agent_id).sameHost}
+                    <pre className="text-xs font-mono bg-white border border-gray-300 rounded p-3 overflow-x-auto whitespace-pre">
+                      {generateDockerCommand(agentForm.agent_id, gatewayIP)}
                     </pre>
-                    <p className="mt-1 text-xs text-gray-500">Use when agent container needs to reach gateway on host machine (Mac/Windows)</p>
-                  </div>
-
-                  {/* Different Host */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-xs font-medium text-gray-700">3. Different Host/Remote</p>
-                      <button
-                        type="button"
-                        onClick={() => copyDockerCommand(generateDockerCommands(agentForm.agent_id).differentHost)}
-                        className="flex items-center gap-1 px-2 py-1 text-xs border border-black rounded hover:bg-black hover:text-white transition-colors"
-                      >
-                        <Copy className="w-3 h-3" />
-                        Copy
-                      </button>
-                    </div>
-                    <pre className="text-xs font-mono bg-white border border-gray-300 rounded p-2 overflow-x-auto whitespace-pre">
-                      {generateDockerCommands(agentForm.agent_id).differentHost}
-                    </pre>
-                    <p className="mt-1 text-xs text-gray-500">Replace YOUR_GATEWAY_IP with the actual IP address of your gateway server</p>
+                    <p className="mt-2 text-xs text-gray-500">
+                      Run this command on any machine with Docker installed to deploy the agent
+                    </p>
                   </div>
 
                   {dockerCmdCopied && (
-                    <div className="text-xs text-green-600 font-medium">✓ Copied to clipboard!</div>
+                    <div className="text-xs text-green-600 font-medium flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Copied to clipboard!
+                    </div>
                   )}
                 </div>
               )}
