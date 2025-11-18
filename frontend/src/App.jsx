@@ -99,6 +99,7 @@ function App() {
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/execute-query`, {
+        credentials: 'include',
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query, database_id: selectedDatabaseId }),
@@ -216,7 +217,7 @@ function App() {
   const fetchUsers = async () => {
     setLoadingUsers(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/api/users`)
+      const response = await fetch(`${API_BASE_URL}/api/users`, { credentials: 'include' })
       const data = await response.json()
       setUsers(data || [])
     } catch (err) {
@@ -262,6 +263,7 @@ function App() {
       const method = editingUser ? 'PUT' : 'POST'
 
       const response = await fetch(url, {
+        credentials: 'include',
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userForm),
@@ -288,6 +290,7 @@ function App() {
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
+        credentials: 'include',
         method: 'DELETE',
       })
 
@@ -309,7 +312,7 @@ function App() {
   const fetchAgents = async () => {
     setLoadingAgents(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/api/agents`)
+      const response = await fetch(`${API_BASE_URL}/api/agents`, { credentials: 'include' })
       const data = await response.json()
       setAgents(data || [])
     } catch (err) {
@@ -362,6 +365,7 @@ function App() {
       const method = editingAgent ? 'PUT' : 'POST'
 
       const response = await fetch(url, {
+        credentials: 'include',
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -391,6 +395,7 @@ function App() {
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/agents/${agentId}`, {
+        credentials: 'include',
         method: 'DELETE',
       })
 
@@ -429,7 +434,7 @@ function App() {
   const fetchDatabases = async () => {
     setLoadingDatabases(true)
     try {
-      const response = await fetch(`${API_BASE_URL}/api/databases`)
+      const response = await fetch(`${API_BASE_URL}/api/databases`, { credentials: 'include' })
       const data = await response.json()
       setDatabases(data || [])
       if (data && data.length > 0 && !selectedDatabaseId) {
@@ -488,6 +493,7 @@ function App() {
       const method = editingDatabase ? 'PUT' : 'POST'
 
       const response = await fetch(url, {
+        credentials: 'include',
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(databaseForm),
@@ -514,6 +520,7 @@ function App() {
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/databases/${databaseId}`, {
+        credentials: 'include',
         method: 'DELETE',
       })
 

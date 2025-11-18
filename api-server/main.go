@@ -256,17 +256,19 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// Authentication endpoints
+	// Authentication endpoints (public)
 	mux.HandleFunc("/api/auth/google", handleGoogleLogin)
 	mux.HandleFunc("/api/auth/google/callback", handleGoogleCallback)
-	mux.HandleFunc("/api/auth/me", handleGetMe)
-	mux.HandleFunc("/api/auth/logout", handleLogout)
 
-	// Query execution endpoints
-	mux.HandleFunc("/api/execute-query", handleExecuteQuery)
+	// Authentication endpoints (protected)
+	mux.HandleFunc("/api/auth/me", authMiddleware(handleGetMe))
+	mux.HandleFunc("/api/auth/logout", authMiddleware(handleLogout))
 
-	// User management endpoints
-	mux.HandleFunc("/api/users", func(w http.ResponseWriter, r *http.Request) {
+	// Query execution endpoints (protected)
+	mux.HandleFunc("/api/execute-query", authMiddleware(handleExecuteQuery))
+
+	// User management endpoints (protected)
+	mux.HandleFunc("/api/users", authMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			handleGetUsers(w, r)
@@ -275,8 +277,8 @@ func main() {
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	})
-	mux.HandleFunc("/api/users/", func(w http.ResponseWriter, r *http.Request) {
+	}))
+	mux.HandleFunc("/api/users/", authMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			handleGetUser(w, r)
@@ -287,10 +289,10 @@ func main() {
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	})
+	}))
 
-	// Agent management endpoints
-	mux.HandleFunc("/api/agents", func(w http.ResponseWriter, r *http.Request) {
+	// Agent management endpoints (protected)
+	mux.HandleFunc("/api/agents", authMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			handleGetAgents(w, r)
@@ -299,8 +301,8 @@ func main() {
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	})
-	mux.HandleFunc("/api/agents/", func(w http.ResponseWriter, r *http.Request) {
+	}))
+	mux.HandleFunc("/api/agents/", authMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			handleGetAgent(w, r)
@@ -311,10 +313,10 @@ func main() {
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	})
+	}))
 
-	// Database management endpoints
-	mux.HandleFunc("/api/databases", func(w http.ResponseWriter, r *http.Request) {
+	// Database management endpoints (protected)
+	mux.HandleFunc("/api/databases", authMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			handleGetDatabases(w, r)
@@ -323,8 +325,8 @@ func main() {
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	})
-	mux.HandleFunc("/api/databases/", func(w http.ResponseWriter, r *http.Request) {
+	}))
+	mux.HandleFunc("/api/databases/", authMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			handleGetDatabase(w, r)
@@ -335,7 +337,7 @@ func main() {
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
-	})
+	}))
 
 	// Health check
 	mux.HandleFunc("/health", handleHealth)
