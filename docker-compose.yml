@@ -109,6 +109,10 @@ services:
       - POSTGRES_PASSWORD=bifrost_secure_pass
       - POSTGRES_DB=bifrost_app
       - POSTGRES_SSLMODE=disable
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URL=${GOOGLE_REDIRECT_URL:-http://localhost:8080/api/auth/google/callback}
+      - JWT_SECRET=${JWT_SECRET:-change-this-jwt-secret-in-production}
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 10s

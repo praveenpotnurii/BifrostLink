@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/joho/godotenv"
 	"github.com/rs/cors"
 	pb "github.com/bifrost/common/proto"
 	pbagent "github.com/bifrost/common/proto/agent"
@@ -241,13 +242,25 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	// Load .env file (ignore error if file doesn't exist, use environment variables instead)
+	_ = godotenv.Load()
+
 	// Initialize database connection
 	if err := InitDB(); err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	defer CloseDB()
 
+	// Initialize OAuth and JWT
+	InitAuth()
+
 	mux := http.NewServeMux()
+
+	// Authentication endpoints
+	mux.HandleFunc("/api/auth/google", handleGoogleLogin)
+	mux.HandleFunc("/api/auth/google/callback", handleGoogleCallback)
+	mux.HandleFunc("/api/auth/me", handleGetMe)
+	mux.HandleFunc("/api/auth/logout", handleLogout)
 
 	// Query execution endpoints
 	mux.HandleFunc("/api/execute-query", handleExecuteQuery)
@@ -336,6 +349,11 @@ func main() {
 	}).Handler(mux)
 
 	log.Println("🚀 REST API Server starting on :8080")
+	log.Println("   Authentication:")
+	log.Println("   - GET    /api/auth/google")
+	log.Println("   - GET    /api/auth/google/callback")
+	log.Println("   - GET    /api/auth/me")
+	log.Println("   - POST   /api/auth/logout")
 	log.Println("   Query Execution:")
 	log.Println("   - POST   /api/execute-query")
 	log.Println("   User Management:")

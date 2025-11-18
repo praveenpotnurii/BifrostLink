@@ -1,3 +1,4 @@
 serviceaccount.json
 CLAUDE.md
 push-agent-to-docker.sh
+api-server/.env

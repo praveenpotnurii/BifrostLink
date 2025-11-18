@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Play, Database, AlertCircle, CheckCircle2, Loader2, Copy, Trash2, Users, Plus, Edit, X, Activity, Circle, Server } from 'lucide-react'
+import { Play, Database, AlertCircle, CheckCircle2, Loader2, Copy, Trash2, Users, Plus, Edit, X, Activity, Circle, Server, LogOut, User } from 'lucide-react'
 import { cn } from './lib/utils'
+import { useAuth } from './AuthProvider'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
 
 function App() {
+  const { user, logout } = useAuth()
   // Initialize activeTab from URL hash, default to 'sql'
   const getInitialTab = () => {
     const hash = window.location.hash.slice(1) // Remove the '#'
@@ -536,9 +538,55 @@ function App() {
       {/* Header */}
       <header className="border-b border-black">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center gap-3">
-            <Database className="w-6 h-6" />
-            <h1 className="text-2xl font-bold tracking-tight">BifrostLink</h1>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Database className="w-6 h-6" />
+              <h1 className="text-2xl font-bold tracking-tight">BifrostLink</h1>
+            </div>
+
+            {/* User Profile */}
+            {user && (
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="relative w-8 h-8">
+                    {user.avatar_url ? (
+                      <>
+                        <img
+                          src={user.avatar_url}
+                          alt={user.username}
+                          className="w-8 h-8 rounded-full border border-black object-cover"
+                          referrerPolicy="no-referrer"
+                          crossOrigin="anonymous"
+                          onError={(e) => {
+                            e.target.style.display = 'none'
+                            e.target.nextElementSibling.style.display = 'flex'
+                          }}
+                        />
+                        <div className="w-8 h-8 rounded-full border border-black items-center justify-center bg-gray-100 hidden">
+                          <User className="w-4 h-4" />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="w-8 h-8 rounded-full border border-black flex items-center justify-center bg-gray-100">
+                        <User className="w-4 h-4" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-sm">
+                    <div className="font-medium">{user.username}</div>
+                    <div className="text-xs text-gray-600">{user.email}</div>
+                  </div>
+                </div>
+                <button
+                  onClick={logout}
+                  className="flex items-center gap-2 px-3 py-2 border border-black rounded-md hover:bg-black hover:text-white transition-colors"
+                  title="Logout"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span className="text-sm">Logout</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Tabs */}
