@@ -1,0 +1,140 @@
+services:
+  # Gateway Server (Docker Hub)
+  gateway:
+    image: praveenpotnurii/bifrostlink-gateway:latest
+    container_name: bifrost-gateway
+    ports:
+      - "8010:8010"  # gRPC port
+      - "8011:8011"  # HTTP port for agent status
+    networks:
+      - bifrost-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8010"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: bifrost-mysql
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_DATABASE=testdb
+      - MYSQL_USER=bifrostuser
+      - MYSQL_PASSWORD=bifrostpass
+    volumes:
+      - ./mysql-init:/docker-entrypoint-initdb.d
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    networks:
+      - bifrost-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: bifrost-mongodb
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=rootpassword
+      - MONGO_INITDB_DATABASE=testdb
+    volumes:
+      - ./mongo-init:/docker-entrypoint-initdb.d
+      - mongodb-data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - bifrost-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # PostgreSQL Database (Application Data)
+  postgres:
+    image: postgres:16-alpine
+    container_name: bifrost-postgres
+    environment:
+      - POSTGRES_USER=bifrost_admin
+      - POSTGRES_PASSWORD=bifrost_secure_pass
+      - POSTGRES_DB=bifrost_app
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - bifrost-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bifrost_admin -d bifrost_app"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # REST API Server (Docker Hub)
+  api-server:
+    image: praveenpotnurii/bifrostlink-api-server:latest
+    container_name: bifrost-api-server
+    ports:
+      - "8080:8080"
+    depends_on:
+      gateway:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - bifrost-network
+    environment:
+      - GATEWAY_ADDR=gateway:8010
+      - GATEWAY_HTTP_ADDR=gateway:8011
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=bifrost_admin
+      - POSTGRES_PASSWORD=bifrost_secure_pass
+      - POSTGRES_DB=bifrost_app
+      - POSTGRES_SSLMODE=disable
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URL=${GOOGLE_REDIRECT_URL:-http://localhost:8080/api/auth/google/callback}
+      - JWT_SECRET=${JWT_SECRET:-change-this-jwt-secret-in-production}
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # React Frontend (Docker Hub)
+  frontend:
+    image: praveenpotnurii/bifrostlink-frontend:latest
+    container_name: bifrost-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api-server
+    networks:
+      - bifrost-network
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8080
+    restart: unless-stopped
+
+networks:
+  bifrost-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  mongodb-data:
+  postgres-data:
