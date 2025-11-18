@@ -25,30 +25,16 @@ WORKDIR /build/agent
 ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH:-amd64} go build -ldflags="-w -s" -o bifrost-agent .
 
-# Runtime stage - Using Debian slim for glibc compatibility (required by mongosh)
+# Runtime stage - Using Debian slim for minimal footprint
 FROM debian:bookworm-slim
 
 ARG TARGETARCH
-# Install required runtime tools including mysql-client, postgresql-client, and mongosh for POC demo
+# Install only essential runtime dependencies
+# No CLI tools needed - using native wire protocols for MySQL, PostgreSQL, and MongoDB
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     bash \
-    curl \
-    default-mysql-client \
-    postgresql-client \
-    && rm -rf /var/lib/apt/lists/* && \
-    # Download and install mongosh (MongoDB Shell) pre-built binary
-    if [ "$TARGETARCH" = "arm64" ]; then \
-        MONGOSH_ARCH="arm64"; \
-    else \
-        MONGOSH_ARCH="x64"; \
-    fi && \
-    curl -L https://downloads.mongodb.com/compass/mongosh-2.3.1-linux-${MONGOSH_ARCH}.tgz -o mongosh.tgz && \
-    tar -xzf mongosh.tgz && \
-    mv mongosh-2.3.1-linux-${MONGOSH_ARCH}/bin/mongosh /usr/local/bin/ && \
-    mv mongosh-2.3.1-linux-${MONGOSH_ARCH}/bin/mongosh_crypt_v1.so /usr/lib/ 2>/dev/null || true && \
-    rm -rf mongosh.tgz mongosh-2.3.1-linux-* && \
-    chmod +x /usr/local/bin/mongosh
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

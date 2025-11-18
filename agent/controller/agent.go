@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -238,30 +237,6 @@ func (a *Agent) processSessionOpen(pkt *pb.Packet) {
 			}})
 		log.With("sid", sessionIDKey).Infof("sent gateway connect ok")
 	}()
-}
-
-func (a *Agent) executeMySQLCommand(mysqlCmd string) ([]byte, int) {
-	cmd := exec.Command("sh", "-c", mysqlCmd)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return output, exitErr.ExitCode()
-		}
-		return output, 1
-	}
-	return output, 0
-}
-
-func (a *Agent) executeMongoDBCommand(mongoCmd string) ([]byte, int) {
-	cmd := exec.Command("sh", "-c", mongoCmd)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return output, exitErr.ExitCode()
-		}
-		return output, 1
-	}
-	return output, 0
 }
 
 func (a *Agent) processTCPCloseConnection(pkt *pb.Packet) {
